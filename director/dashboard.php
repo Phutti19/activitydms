@@ -3,31 +3,25 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../includes/auth.php';
 require_role('director');
+
+$page_title = 'หน้าหลัก';
+$page_active = 'dashboard';
+require __DIR__ . '/../includes/header.php';
 ?>
-<!DOCTYPE html>
-<html lang="th">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>หน้าหลัก Director — <?= htmlspecialchars(APP_NAME, ENT_QUOTES, 'UTF-8') ?></title>
-    <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-    <style>body { font-family: 'Sarabun', sans-serif; background: #F8FAFC; }</style>
-</head>
-<body class="p-4">
-    <div class="container">
-        <h1 class="h4 fw-semibold">หน้าหลัก Director (Read-only)</h1>
-        <p class="text-muted">
-            สวัสดี <?= htmlspecialchars($_SESSION['display_name'] ?? '', ENT_QUOTES, 'UTF-8') ?>
-            (<?= htmlspecialchars($_SESSION['role'], ENT_QUOTES, 'UTF-8') ?>)
-        </p>
-        <div class="alert alert-info small">
-            <strong>Phase 2 stub</strong> — Dashboard จริงจะมาใน Phase 10
-        </div>
-        <form method="POST" action="<?= htmlspecialchars(APP_URL, ENT_QUOTES, 'UTF-8') ?>/logout.php">
-            <?php require_once __DIR__ . '/../includes/csrf.php'; echo csrf_field(); ?>
-            <button type="submit" class="btn btn-outline-secondary btn-sm">ออกจากระบบ</button>
-        </form>
+
+<div class="page-header">
+    <h1 class="page-title">หน้าหลัก Director</h1>
+</div>
+
+<div class="card p-4">
+    <p class="mb-1">
+        สวัสดี <strong><?= htmlspecialchars($_SESSION['display_name'] ?? '', ENT_QUOTES, 'UTF-8') ?></strong>
+    </p>
+    <p class="text-muted small mb-3">บทบาท: ผู้อำนวยการ (อ่านอย่างเดียว)</p>
+    <div class="alert alert-info small mb-0">
+        <i class="bi bi-info-circle me-1"></i>
+        <strong>Phase 2/3 stub</strong> — Director dashboard จริงจะมาใน Phase 10
     </div>
-</body>
-</html>
+</div>
+
+<?php require __DIR__ . '/../includes/footer.php'; ?>
