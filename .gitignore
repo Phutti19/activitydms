@@ -1,0 +1,20 @@
+.env
+uploads/
+*.log
+node_modules/
+vendor/
+.DS_Store
+
+# Session storage
+storage/sessions/*
+!storage/sessions/.gitkeep
+
+# IDE / OS
+.vscode/
+.idea/
+Thumbs.db
+
+# Backup files
+*.bak
+*.swp
+*~

@@ -1,0 +1,13 @@
+{
+    "name": "arit/activitydms",
+    "description": "Activity & Document Management System for ARIT",
+    "type": "project",
+    "require": {
+        "php": ">=8.0",
+        "vlucas/phpdotenv": "^5.6",
+        "phpmailer/phpmailer": "^6.9"
+    },
+    "config": {
+        "sort-packages": true
+    }
+}
