@@ -14,11 +14,18 @@ $f_type   = (int)($_GET['type']   ?? 0);
 $f_time   = $_GET['time']   ?? '';
 $f_search = trim((string)($_GET['q'] ?? ''));
 
-$years = $pdo->query('SELECT id, name FROM fiscal_years ORDER BY start_year DESC')->fetchAll();
-$types = $pdo->query('SELECT id, name, color FROM activity_types WHERE is_active = 1 ORDER BY id')->fetchAll();
+$years_stmt = $pdo->prepare('SELECT id, name FROM fiscal_years ORDER BY start_year DESC');
+$years_stmt->execute();
+$years = $years_stmt->fetchAll();
+
+$types_stmt = $pdo->prepare('SELECT id, name, color FROM activity_types WHERE is_active = 1 ORDER BY id');
+$types_stmt->execute();
+$types = $types_stmt->fetchAll();
 
 if ($f_fiscal === 0 && !isset($_GET['fiscal'])) {
-    $fy_active = $pdo->query('SELECT id FROM fiscal_years WHERE is_active = 1 LIMIT 1')->fetch();
+    $fy_active_stmt = $pdo->prepare('SELECT id FROM fiscal_years WHERE is_active = 1 LIMIT 1');
+    $fy_active_stmt->execute();
+    $fy_active = $fy_active_stmt->fetch();
     if ($fy_active) $f_fiscal = (int)$fy_active['id'];
 }
 

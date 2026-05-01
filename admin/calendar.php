@@ -69,12 +69,33 @@ document.addEventListener('DOMContentLoaded', function () {
         },
         eventMouseEnter: function(info) {
             var ep = info.event.extendedProps;
-            var loc = ep.location ? '<div class="text-muted"><i class="bi bi-geo-alt"></i> ' + ep.location + '</div>' : '';
-            var type = ep.type ? '<span class="badge bg-secondary me-1">' + ep.type + '</span>' : '';
-            tooltipContent.innerHTML =
-                '<div class="fw-semibold mb-1">' + info.event.title + '</div>' +
-                '<div class="mb-1">' + type + '</div>' +
-                loc;
+            // Build via DOM API + textContent — กัน XSS จากค่าใน DB
+            tooltipContent.replaceChildren();
+
+            var titleEl = document.createElement('div');
+            titleEl.className = 'fw-semibold mb-1';
+            titleEl.textContent = info.event.title || '';
+            tooltipContent.appendChild(titleEl);
+
+            if (ep.type) {
+                var typeWrap = document.createElement('div');
+                typeWrap.className = 'mb-1';
+                var typeBadge = document.createElement('span');
+                typeBadge.className = 'badge bg-secondary me-1';
+                typeBadge.textContent = ep.type;
+                typeWrap.appendChild(typeBadge);
+                tooltipContent.appendChild(typeWrap);
+            }
+
+            if (ep.location) {
+                var locEl = document.createElement('div');
+                locEl.className = 'text-muted';
+                var icon = document.createElement('i');
+                icon.className = 'bi bi-geo-alt';
+                locEl.appendChild(icon);
+                locEl.appendChild(document.createTextNode(' ' + ep.location));
+                tooltipContent.appendChild(locEl);
+            }
             tooltip.style.display = 'block';
         },
         eventMouseLeave: function() {

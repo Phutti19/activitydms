@@ -25,7 +25,7 @@ if (in_array($f_status, ['registered', 'attended', 'absent'], true)) {
 $stmt = $pdo->prepare(
     "SELECT a.id, a.title, a.location, a.start_datetime, a.end_datetime, a.external_url,
             t.name AS type_name, t.color AS type_color,
-            r.status AS reg_status, r.created_at AS reg_at
+            r.status AS reg_status, r.registered_at AS reg_at
      FROM activity_registrations r
      JOIN activities a ON a.id = r.activity_id
      LEFT JOIN activity_types t ON t.id = a.activity_type_id

@@ -96,7 +96,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         ]);
                         flash_set('success', 'อัปโหลด "' . $label . '" สำเร็จ');
                     } catch (Throwable $e) {
-                        flash_set('error', 'อัปโหลดไม่สำเร็จ: ' . $e->getMessage());
+                        error_log('[activity_view add_attachment] ' . $e->getMessage());
+                        flash_set('error', 'อัปโหลดไม่สำเร็จ');
                     }
                 }
             }
@@ -152,7 +153,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         'activity_id' => $id, 'user_id' => $uid,
                     ]);
 
-                    if (enqueue_new_activity_email($uid, $id) !== null) {
+                    if (enqueue_new_activity_email($uid, $id)) {
                         $email_count++;
                     }
                     $added++;
@@ -250,8 +251,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } else {
             $usr = $pdo->prepare('SELECT id FROM users WHERE id = :id AND is_active = 1 LIMIT 1');
             $usr->execute([':id' => $cert_user_id]);
+            $is_participant = $pdo->prepare(
+                'SELECT 1 FROM activity_registrations
+                 WHERE activity_id = :a AND user_id = :u LIMIT 1'
+            );
+            $is_participant->execute([':a' => $id, ':u' => $cert_user_id]);
+
             if (!$usr->fetch()) {
                 flash_set('error', 'ไม่พบผู้ใช้');
+            } elseif (!$is_participant->fetch()) {
+                flash_set('error', 'ผู้ใช้นี้ไม่ได้เป็นผู้เข้าร่วมกิจกรรมนี้ — ออกเกียรติบัตรให้ได้เฉพาะผู้เข้าร่วมเท่านั้น');
             } else {
                 $dup = $pdo->prepare(
                     'SELECT id FROM certificates WHERE activity_id = :a AND user_id = :u LIMIT 1'

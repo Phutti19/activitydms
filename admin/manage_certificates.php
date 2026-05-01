@@ -32,8 +32,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $usr = $pdo->prepare('SELECT id FROM users WHERE id = :id AND is_active = 1 LIMIT 1');
             $usr->execute([':id' => $cert_user_id]);
 
+            $is_participant = $pdo->prepare(
+                'SELECT 1 FROM activity_registrations
+                 WHERE activity_id = :a AND user_id = :u LIMIT 1'
+            );
+            $is_participant->execute([':a' => $cert_activity_id, ':u' => $cert_user_id]);
+
             if (!$activity_row || !$usr->fetch()) {
                 flash_set('error', 'ไม่พบกิจกรรมหรือผู้ใช้ที่เลือก');
+            } elseif (!$is_participant->fetch()) {
+                flash_set('error', 'ผู้ใช้นี้ไม่ได้เป็นผู้เข้าร่วมกิจกรรมนี้ — ออกเกียรติบัตรให้ได้เฉพาะผู้เข้าร่วมเท่านั้น');
             } else {
                 $dup = $pdo->prepare(
                     'SELECT id FROM certificates WHERE activity_id = :a AND user_id = :u LIMIT 1'

@@ -34,7 +34,7 @@ function _adms_error_page(int $code, string $heading, string $detail): never
         <title>{$h} — {$app_name}</title>
         <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
         <style>
-            body { font-family: 'Sarabun', sans-serif; background: #F8FAFC; }
+            body { font-family: 'Kanit', system-ui, sans-serif; background: #F8FAFC; }
             .error-box { max-width: 480px; margin: 10vh auto; text-align: center; }
             .error-code { font-size: 72px; font-weight: 700; color: #CBD5E1; line-height: 1; }
         </style>

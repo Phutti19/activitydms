@@ -8,13 +8,6 @@ $uid = (int) current_user_id();
 $pdo = db();
 
 // stat: กิจกรรมที่ลงทะเบียน (org)
-$reg_count = (int) $pdo->prepare(
-    'SELECT COUNT(*) FROM activity_registrations WHERE user_id = :u'
-)->execute([':u' => $uid]) ? $pdo->prepare(
-    'SELECT COUNT(*) FROM activity_registrations WHERE user_id = :u'
-)->execute([':u' => $uid]) : 0;
-
-// ใช้ query แยกเพื่อ readability
 $s1 = $pdo->prepare('SELECT COUNT(*) FROM activity_registrations WHERE user_id = :u');
 $s1->execute([':u' => $uid]);
 $reg_count = (int) $s1->fetchColumn();

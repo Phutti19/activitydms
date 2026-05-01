@@ -70,13 +70,31 @@ document.addEventListener('DOMContentLoaded', function () {
         },
         eventMouseEnter: function(info) {
             var ep = info.event.extendedProps;
-            var loc = ep.location ? '<div class="text-muted mt-1"><i class="bi bi-geo-alt"></i> ' + ep.location + '</div>' : '';
-            var statusBadge = ep.status
-                ? '<span class="badge bg-' + ({'attended':'success','absent':'danger','registered':'secondary'}[ep.status] || 'secondary') + ' mt-1">' + ({'attended':'เข้าร่วมแล้ว','absent':'ขาด','registered':'ลงทะเบียน'}[ep.status] || '') + '</span>'
-                : '';
-            tooltipContent.innerHTML =
-                '<div class="fw-semibold">' + info.event.title + '</div>' +
-                statusBadge + loc;
+            tooltipContent.replaceChildren();
+
+            var titleEl = document.createElement('div');
+            titleEl.className = 'fw-semibold';
+            titleEl.textContent = info.event.title || '';
+            tooltipContent.appendChild(titleEl);
+
+            if (ep.status) {
+                var statusColor = {'attended':'success','absent':'danger','registered':'secondary'}[ep.status] || 'secondary';
+                var statusLabel = {'attended':'เข้าร่วมแล้ว','absent':'ขาด','registered':'ลงทะเบียน'}[ep.status] || '';
+                var sb = document.createElement('span');
+                sb.className = 'badge bg-' + statusColor + ' mt-1';
+                sb.textContent = statusLabel;
+                tooltipContent.appendChild(sb);
+            }
+
+            if (ep.location) {
+                var locEl = document.createElement('div');
+                locEl.className = 'text-muted mt-1';
+                var icon = document.createElement('i');
+                icon.className = 'bi bi-geo-alt';
+                locEl.appendChild(icon);
+                locEl.appendChild(document.createTextNode(' ' + ep.location));
+                tooltipContent.appendChild(locEl);
+            }
             tooltip.style.display = 'block';
         },
         eventMouseLeave: function() {

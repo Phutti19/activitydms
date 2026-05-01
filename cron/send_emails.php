@@ -30,7 +30,9 @@ use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\SMTP;
 use PHPMailer\PHPMailer\Exception as MailerException;
 
-define('MAIL_BATCH_SIZE', 50);  // จำนวนสูงสุดต่อรอบ (rate limit)
+// จำนวนสูงสุดต่อรอบ — rate limit ≤50/ชม./trigger บังคับฝั่ง enqueue
+// (ดู includes/mailer.php → rate_limit_exceeded()) batch ตรงนี้แค่ระบาย backlog
+define('MAIL_BATCH_SIZE', 50);
 define('MAIL_MAX_RETRY', 3);
 
 $pdo = db();

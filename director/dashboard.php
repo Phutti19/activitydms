@@ -7,41 +7,52 @@ require_role('director');
 $pdo = db();
 
 // Active fiscal year
-$fy = $pdo->query('SELECT id, name FROM fiscal_years WHERE is_active = 1 LIMIT 1')->fetch();
+$fy_stmt = $pdo->prepare('SELECT id, name FROM fiscal_years WHERE is_active = 1 LIMIT 1');
+$fy_stmt->execute();
+$fy = $fy_stmt->fetch();
 $fy_id   = $fy ? (int)$fy['id'] : 0;
 $fy_name = $fy ? $fy['name'] : '—';
 
-// Stats for active fiscal year
-$fy_filter = $fy_id > 0 ? 'AND a.fiscal_year_id = ' . $fy_id : '';
+// Stats for active fiscal year — bound parameter, not concatenated
+$fy_clause = $fy_id > 0 ? 'AND a.fiscal_year_id = :fy' : '';
+$fy_params = $fy_id > 0 ? [':fy' => $fy_id] : [];
 
 // Total org activities this year
-$total_activities = (int)$pdo->query(
-    'SELECT COUNT(*) FROM activities a WHERE a.scope = "organization" ' . $fy_filter
-)->fetchColumn();
+$ta_stmt = $pdo->prepare(
+    'SELECT COUNT(*) FROM activities a WHERE a.scope = "organization" ' . $fy_clause
+);
+$ta_stmt->execute($fy_params);
+$total_activities = (int)$ta_stmt->fetchColumn();
 
 // Total registrations / attended
-$reg_row = $pdo->query(
+$reg_stmt = $pdo->prepare(
     'SELECT COUNT(*) AS reg_total,
             SUM(r.status = "attended") AS attended
      FROM activity_registrations r
      JOIN activities a ON a.id = r.activity_id
-     WHERE a.scope = "organization" ' . $fy_filter
-)->fetch();
+     WHERE a.scope = "organization" ' . $fy_clause
+);
+$reg_stmt->execute($fy_params);
+$reg_row = $reg_stmt->fetch();
 $total_reg      = (int)($reg_row['reg_total'] ?? 0);
 $total_attended = (int)($reg_row['attended'] ?? 0);
 $attend_rate    = $total_reg > 0 ? round(($total_attended / $total_reg) * 100, 1) : 0;
 
 // Total certs issued this year
-$total_certs = (int)$pdo->query(
+$tc_stmt = $pdo->prepare(
     'SELECT COUNT(*) FROM certificates c
      JOIN activities a ON a.id = c.activity_id
-     WHERE a.scope = "organization" ' . $fy_filter
-)->fetchColumn();
+     WHERE a.scope = "organization" ' . $fy_clause
+);
+$tc_stmt->execute($fy_params);
+$total_certs = (int)$tc_stmt->fetchColumn();
 
 // Total active employees
-$total_employees = (int)$pdo->query(
+$te_stmt = $pdo->prepare(
     "SELECT COUNT(*) FROM users WHERE role = 'employee' AND is_active = 1"
-)->fetchColumn();
+);
+$te_stmt->execute();
+$total_employees = (int)$te_stmt->fetchColumn();
 
 // Upcoming activities (next 5)
 $upcoming_stmt = $pdo->prepare(
@@ -60,7 +71,9 @@ $upcoming_stmt->execute();
 $upcoming = $upcoming_stmt->fetchAll();
 
 // Department overview
-$dept_rows = $pdo->query(
+$dept_clause = $fy_id > 0 ? 'AND a.fiscal_year_id = :fy_d' : '';
+$dept_params = $fy_id > 0 ? [':fy_d' => $fy_id] : [];
+$dept_stmt   = $pdo->prepare(
     'SELECT d.name AS dept_name,
             COUNT(DISTINCT u.id) AS member_count,
             COUNT(DISTINCT r.id) AS reg_count,
@@ -68,10 +81,12 @@ $dept_rows = $pdo->query(
      FROM departments d
      LEFT JOIN users u ON u.department_id = d.id AND u.is_active = 1 AND u.role = "employee"
      LEFT JOIN activity_registrations r ON r.user_id = u.id
-     LEFT JOIN activities a ON a.id = r.activity_id AND a.scope = "organization" ' . $fy_filter . '
+     LEFT JOIN activities a ON a.id = r.activity_id AND a.scope = "organization" ' . $dept_clause . '
      GROUP BY d.id
      ORDER BY d.id'
-)->fetchAll();
+);
+$dept_stmt->execute($dept_params);
+$dept_rows = $dept_stmt->fetchAll();
 
 function dir_dash_fmt(string $dt): string {
     $ts = strtotime($dt);

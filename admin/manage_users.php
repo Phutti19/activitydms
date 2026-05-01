@@ -24,7 +24,9 @@ function generate_random_password(int $length = 12): string {
 $valid_roles = ['admin', 'director', 'employee'];
 $role_label  = ['admin'=>'ผู้ดูแลระบบ', 'director'=>'ผู้อำนวยการ', 'employee'=>'พนักงาน'];
 
-$departments = db()->query('SELECT id, name FROM departments ORDER BY id')->fetchAll();
+$dept_stmt = db()->prepare('SELECT id, name FROM departments ORDER BY id');
+$dept_stmt->execute();
+$departments = $dept_stmt->fetchAll();
 $dept_map = [];
 foreach ($departments as $d) $dept_map[(int)$d['id']] = $d['name'];
 

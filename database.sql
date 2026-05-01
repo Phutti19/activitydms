@@ -163,11 +163,13 @@ CREATE TABLE IF NOT EXISTS `email_queue` (
   `body_text`    TEXT                              COMMENT 'เนื้อหา plain text (fallback)',
   `status`       ENUM('pending','sending','sent','failed') NOT NULL DEFAULT 'pending' COMMENT 'pending=รอส่ง | sending=กำลังส่ง | sent=ส่งแล้ว | failed=ล้มเหลวเกิน retry limit',
   `retry_count`  TINYINT UNSIGNED NOT NULL DEFAULT 0 COMMENT 'จำนวนครั้งที่พยายามส่ง (สูงสุด 3 ครั้ง)',
+  `trigger_key`  VARCHAR(50)       DEFAULT NULL    COMMENT 'ชื่อ trigger ที่ enqueue เช่น notify_new_activity ใช้คำนวณ rate limit ต่อ trigger',
   `scheduled_at` DATETIME NOT NULL DEFAULT (NOW()) COMMENT 'เวลาที่ต้องการส่ง — cron จะดึงเฉพาะ record ที่ scheduled_at <= NOW()',
   `sent_at`      DATETIME          DEFAULT NULL    COMMENT 'วันเวลาที่ส่งสำเร็จจริง',
   `created_at`   TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
-  KEY `idx_status_scheduled` (`status`, `scheduled_at`) COMMENT 'Index หลักที่ cron ใช้ดึง pending emails'
+  KEY `idx_status_scheduled` (`status`, `scheduled_at`) COMMENT 'Index หลักที่ cron ใช้ดึง pending emails',
+  KEY `idx_trigger_created`  (`trigger_key`, `created_at`) COMMENT 'ใช้ใน rate limit ต่อ trigger (≤50/ชั่วโมง)'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   COMMENT='คิวอีเมลรอส่ง — cron/send_emails.php ดึงไปส่งทุก 5 นาที retry สูงสุด 3 ครั้ง';
 
