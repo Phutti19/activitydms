@@ -9,8 +9,8 @@ require_login();
 $type = $_GET['type'] ?? '';
 $id   = (int)($_GET['id'] ?? 0);
 
-// Phase 4 รองรับเฉพาะ photo + attachment (Phase 5 จะเพิ่ม document + cert)
-if ($id <= 0 || !in_array($type, ['photo', 'attachment'], true)) {
+// Phase 5: photo + attachment + document + cert
+if ($id <= 0 || !in_array($type, ['photo', 'attachment', 'document', 'cert'], true)) {
     http_response_code(400);
     exit('Invalid request');
 }
@@ -72,11 +72,46 @@ if ($type === 'photo') {
     $ext  = pathinfo((string)$row['filename'], PATHINFO_EXTENSION);
     $base = trim((string)$row['label']) !== '' ? (string)$row['label'] : 'attachment';
     $original_name = $base . ($ext !== '' ? '.' . $ext : '');
+
+} elseif ($type === 'document') {
+    $stmt = db()->prepare(
+        'SELECT id, activity_id, filename, original_name
+         FROM documents
+         WHERE id = :id LIMIT 1'
+    );
+    $stmt->execute([':id' => $id]);
+    $row = $stmt->fetch();
+    if (!$row) { http_response_code(404); exit('Not found'); }
+    // Only general org documents (activity_id IS NULL) — all authenticated users may download
+    if ($row['activity_id'] !== null) { http_response_code(404); exit('Not found'); }
+    $original_name = $row['original_name'];
+
+} elseif ($type === 'cert') {
+    $stmt = db()->prepare(
+        'SELECT c.id, c.activity_id, c.user_id, c.filename, c.original_name
+         FROM certificates c
+         WHERE c.id = :id LIMIT 1'
+    );
+    $stmt->execute([':id' => $id]);
+    $row = $stmt->fetch();
+    if (!$row) { http_response_code(404); exit('Not found'); }
+    // Employee: own cert only; Admin/Director: all
+    if ($role === 'employee' && (int)$row['user_id'] !== $uid) {
+        http_response_code(403); exit('Forbidden');
+    }
+    $original_name = $row['original_name'];
 }
 
+$subdir_map = [
+    'photo'      => 'activities',
+    'attachment' => 'activities',
+    'document'   => 'documents',
+    'cert'       => 'certificates',
+];
+$subdir        = $subdir_map[$type];
 $filename_safe = basename((string)$row['filename']);
-$base_dir = realpath(UPLOAD_PATH . '/activities');
-$real     = realpath(UPLOAD_PATH . '/activities/' . $filename_safe);
+$base_dir      = realpath(UPLOAD_PATH . '/' . $subdir);
+$real          = realpath(UPLOAD_PATH . '/' . $subdir . '/' . $filename_safe);
 
 if ($base_dir === false || $real === false
     || (strpos($real, $base_dir . DIRECTORY_SEPARATOR) !== 0 && $real !== $base_dir)) {

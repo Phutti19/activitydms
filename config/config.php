@@ -40,3 +40,6 @@ define('APP_ENV', $_ENV['APP_ENV']);
 define('APP_DEBUG', filter_var($_ENV['APP_DEBUG'], FILTER_VALIDATE_BOOLEAN));
 define('UPLOAD_PATH', rtrim(str_replace('\\', '/', $_ENV['UPLOAD_PATH']), '/'));
 define('CSRF_TOKEN_NAME', $_ENV['CSRF_TOKEN_NAME'] ?? 'adms_csrf');
+
+// Global error & exception handler (ต้องอยู่หลัง define ด้านบน)
+require_once __DIR__ . '/../includes/error_handler.php';

@@ -46,7 +46,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $pdo->beginTransaction();
         try {
             if ($is_active === 1) {
-                $pdo->exec('UPDATE fiscal_years SET is_active = 0');
+                $pdo->prepare('UPDATE fiscal_years SET is_active = 0')->execute([]);
             }
 
             if ($action === 'create') {

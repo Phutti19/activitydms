@@ -194,14 +194,121 @@ body {
         padding: 12px;
     }
     .table-stack tbody td {
-        display: flex; justify-content: space-between;
+        display: flex; justify-content: space-between; align-items: flex-start;
         border: none; padding: 6px 0;
-        font-size: 13px;
+        font-size: 13px; gap: 8px;
     }
     .table-stack tbody td::before {
         content: attr(data-label);
         font-weight: 600;
         color: var(--color-text-muted);
-        margin-right: 12px;
+        flex-shrink: 0;
     }
+    /* Cells without data-label (e.g. checkbox column) hide on mobile */
+    .table-stack tbody td:not([data-label]) { display: none; }
+    .table-stack tbody td[data-label=""] { display: flex; }
+}
+
+/* table-stack cell: stack vertically on very small screens */
+@media (max-width: 380px) {
+    .table-stack tbody td {
+        flex-direction: column;
+        gap: 2px;
+    }
+    .table-stack tbody td .text-nowrap { white-space: normal !important; }
+}
+
+/* ===== Nav tabs: horizontal scroll on mobile ===== */
+.nav-tabs {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+}
+.nav-tabs::-webkit-scrollbar { display: none; }
+.nav-tabs .nav-link {
+    white-space: nowrap;
+    font-size: 14px;
+    padding: 8px 14px;
+}
+@media (min-width: 576px) {
+    .nav-tabs .nav-link { font-size: inherit; padding: 8px 16px; }
+}
+
+/* ===== FullCalendar mobile ===== */
+@media (max-width: 540px) {
+    .fc .fc-toolbar.fc-header-toolbar {
+        flex-direction: column;
+        gap: 6px;
+        margin-bottom: 12px !important;
+    }
+    .fc .fc-toolbar-chunk {
+        display: flex;
+        justify-content: center;
+    }
+    .fc .fc-button {
+        font-size: 12px !important;
+        padding: 4px 8px !important;
+        min-height: 36px;
+    }
+    .fc .fc-toolbar-title { font-size: 16px !important; }
+}
+
+/* ===== Stat cards: scale numbers on very small screens ===== */
+@media (max-width: 380px) {
+    .fs-2 { font-size: 1.4rem !important; }
+    .page-title { font-size: 18px; }
+    .app-main { padding: 12px; }
+}
+
+/* ===== Empty state ===== */
+.empty-state {
+    padding: 48px 16px;
+    text-align: center;
+    color: var(--color-text-muted);
+}
+.empty-state i { font-size: 48px; opacity: 0.25; display: block; margin-bottom: 12px; }
+.empty-state p { margin: 0; font-size: 14px; }
+
+/* ===== Activity/content card hover ===== */
+.card-hover {
+    transition: box-shadow 0.15s, transform 0.15s;
+    cursor: pointer;
+}
+.card-hover:hover {
+    box-shadow: 0 4px 16px rgba(0,0,0,0.10);
+    transform: translateY(-1px);
+}
+
+/* ===== Alert: ensure visible below sticky topbar on mobile ===== */
+@media (max-width: 991.98px) {
+    .app-main > .alert { margin-bottom: 12px; }
+}
+
+/* ===== Print styles (for reports page) ===== */
+@media print {
+    .app-topbar, .app-sidebar { display: none !important; }
+    .app-main { margin-left: 0 !important; padding: 8px !important; }
+    .card {
+        box-shadow: none !important;
+        border: 1px solid #ccc !important;
+        break-inside: avoid;
+    }
+    .btn, form[method="GET"], .page-header .btn { display: none !important; }
+    /* Restore table layout for print */
+    .table-stack thead { display: table-header-group !important; }
+    .table-stack tbody tr {
+        display: table-row !important;
+        border: none !important;
+        padding: 0 !important;
+        border-radius: 0 !important;
+        margin-bottom: 0 !important;
+    }
+    .table-stack tbody td {
+        display: table-cell !important;
+        border-bottom: 1px solid #eee !important;
+        padding: 6px 8px !important;
+    }
+    .table-stack tbody td::before { display: none !important; }
+    .table-stack tbody td:not([data-label]) { display: table-cell !important; }
 }

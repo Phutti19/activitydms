@@ -239,6 +239,90 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             audit_log('remove_participant', 'activity_registrations', $reg_id, $old_row, null);
             flash_set('success', 'ลบผู้เข้าร่วมสำเร็จ');
         }
+
+    } elseif ($action === 'upload_cert') {
+        $cert_user_id = (int)($_POST['cert_user_id'] ?? 0);
+        $file = $_FILES['cert_file'] ?? null;
+        if ($cert_user_id <= 0) {
+            flash_set('error', 'กรุณาระบุผู้รับเกียรติบัตร');
+        } elseif (!$file) {
+            flash_set('error', 'ไม่ได้เลือกไฟล์');
+        } else {
+            $usr = $pdo->prepare('SELECT id FROM users WHERE id = :id AND is_active = 1 LIMIT 1');
+            $usr->execute([':id' => $cert_user_id]);
+            if (!$usr->fetch()) {
+                flash_set('error', 'ไม่พบผู้ใช้');
+            } else {
+                $dup = $pdo->prepare(
+                    'SELECT id FROM certificates WHERE activity_id = :a AND user_id = :u LIMIT 1'
+                );
+                $dup->execute([':a' => $id, ':u' => $cert_user_id]);
+                if ($dup->fetch()) {
+                    flash_set('error', 'ผู้ใช้นี้มีเกียรติบัตรสำหรับกิจกรรมนี้แล้ว');
+                } else {
+                    $check = validate_uploaded_file($file, UPLOAD_CERT_MIMES, mb_to_bytes(10));
+                    if ($check['ok']) {
+                        $per_limit = $check['ext'] === 'pdf'
+                            ? mb_to_bytes((int)($_ENV['UPLOAD_MAX_DOC_MB'] ?? 10))
+                            : mb_to_bytes((int)($_ENV['UPLOAD_MAX_IMAGE_MB'] ?? 5));
+                        if ($check['size'] > $per_limit) {
+                            $max_mb = $check['ext'] === 'pdf' ? 10 : 5;
+                            $check  = ['ok' => false, 'error' => "ไฟล์ใหญ่เกิน {$max_mb} MB"];
+                        }
+                    }
+                    if (!$check['ok']) {
+                        flash_set('error', $check['error']);
+                    } else {
+                        $original_name = basename((string)($file['name'] ?? ''));
+                        if ($original_name === '' || mb_strlen($original_name) > 255) {
+                            $original_name = 'certificate.' . $check['ext'];
+                        }
+                        try {
+                            $filename = move_uploaded_with_uuid($file, 'certificates', $check['ext']);
+                            $ins = $pdo->prepare(
+                                'INSERT INTO certificates
+                                   (activity_id, user_id, filename, original_name, uploaded_by)
+                                 VALUES (:a, :u, :f, :o, :by)'
+                            );
+                            $ins->execute([
+                                ':a'  => $id,
+                                ':u'  => $cert_user_id,
+                                ':f'  => $filename,
+                                ':o'  => $original_name,
+                                ':by' => (int)$_SESSION['user_id'],
+                            ]);
+                            $cert_id = (int)$pdo->lastInsertId();
+                            audit_log('upload_cert', 'certificates', $cert_id, null, [
+                                'activity_id' => $id,
+                                'user_id'     => $cert_user_id,
+                                'filename'    => $filename,
+                                'mime'        => $check['mime'],
+                                'size'        => $check['size'],
+                            ]);
+                            enqueue_new_certificate_email($cert_user_id, $id);
+                            flash_set('success', 'อัปโหลดเกียรติบัตรสำเร็จ');
+                        } catch (Throwable $e) {
+                            error_log('[activity_view upload_cert] ' . $e->getMessage());
+                            flash_set('error', 'อัปโหลดไม่สำเร็จ');
+                        }
+                    }
+                }
+            }
+        }
+
+    } elseif ($action === 'delete_cert') {
+        $cert_id  = (int)($_POST['cert_id'] ?? 0);
+        $cert_row = $pdo->prepare(
+            'SELECT * FROM certificates WHERE id = :id AND activity_id = :a LIMIT 1'
+        );
+        $cert_row->execute([':id' => $cert_id, ':a' => $id]);
+        $cert = $cert_row->fetch();
+        if ($cert) {
+            $pdo->prepare('DELETE FROM certificates WHERE id = :id')->execute([':id' => $cert_id]);
+            audit_log('delete_cert', 'certificates', $cert_id, $cert, null);
+            safe_unlink_upload('certificates', $cert['filename']);
+            flash_set('success', 'ลบเกียรติบัตรสำเร็จ');
+        }
     }
 
     $tab = $_POST['_tab'] ?? '';
@@ -313,6 +397,22 @@ foreach ($registrations as $r) {
 $photo_count   = count($photos);
 $can_add_photo = $photo_count < 5;
 
+$certs_raw = db()->prepare(
+    "SELECT c.*, TRIM(CONCAT_WS(' ', u.prefix_name, u.first_name, u.last_name)) AS user_name,
+            u.username
+     FROM certificates c
+     JOIN users u ON u.id = c.user_id
+     WHERE c.activity_id = :a
+     ORDER BY u.first_name"
+);
+$certs_raw->execute([':a' => $id]);
+$all_certs    = $certs_raw->fetchAll();
+$cert_by_user = array_column($all_certs, null, 'user_id');
+$cert_count   = count($all_certs);
+
+$max_cert_pdf_mb = (int)($_ENV['UPLOAD_MAX_DOC_MB'] ?? 10);
+$max_cert_img_mb = (int)($_ENV['UPLOAD_MAX_IMAGE_MB'] ?? 5);
+
 function format_date_th(string $datetime): string {
     $ts = strtotime($datetime);
     $months = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
@@ -364,6 +464,11 @@ require __DIR__ . '/../includes/header.php';
     <li class="nav-item">
         <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-attendance" type="button">
             <i class="bi bi-people me-1"></i> ผู้เข้าร่วม <span class="badge bg-secondary"><?= count($registrations) ?></span>
+        </button>
+    </li>
+    <li class="nav-item">
+        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-certs" type="button">
+            <i class="bi bi-award me-1"></i> เกียรติบัตร <span class="badge bg-secondary"><?= $cert_count ?></span>
         </button>
     </li>
 </ul>
@@ -445,7 +550,7 @@ require __DIR__ . '/../includes/header.php';
             <div class="text-muted small">JPG / PNG / WEBP — สูงสุด <?= $max_image_mb ?> MB ต่อไฟล์</div>
             <div class="text-muted small">เพิ่มได้อีก <span id="remainSlot"><?= 5 - $photo_count ?></span> ภาพ จาก 5</div>
             <input type="file" id="photoInput" accept="image/jpeg,image/png,image/webp"
-                   multiple style="display:none;">
+                   multiple capture="environment" style="display:none;">
         </div>
         <div id="uploadStatus"></div>
         <?php else: ?>
@@ -723,6 +828,110 @@ require __DIR__ . '/../includes/header.php';
                 </div>
             </div>
         <?php endif; ?>
+    </div><!-- /tab-attendance -->
+
+    <div class="tab-pane fade" id="tab-certs">
+        <?php if (empty($registrations)): ?>
+        <div class="card p-4 text-center text-muted">
+            <i class="bi bi-award" style="font-size:40px;opacity:0.3;"></i>
+            <p class="mt-2 mb-0">ยังไม่มีผู้เข้าร่วม — เพิ่มผู้เข้าร่วมในแท็บ "ผู้เข้าร่วม" ก่อน</p>
+        </div>
+        <?php else: ?>
+        <div class="card">
+            <div class="table-responsive">
+                <table class="table table-stack mb-0 align-middle">
+                    <thead class="bg-light">
+                        <tr>
+                            <th>ชื่อ-สกุล</th>
+                            <th>การเข้าร่วม</th>
+                            <th class="text-end">เกียรติบัตร</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($registrations as $r):
+                            $cert    = $cert_by_user[(int)$r['uid']] ?? null;
+                            $nm_safe = htmlspecialchars($r['fullname'], ENT_QUOTES, 'UTF-8');
+                            $st_badge = match($r['status']) {
+                                'attended' => '<span class="badge bg-success">เข้าร่วม</span>',
+                                'absent'   => '<span class="badge bg-danger">ขาด</span>',
+                                default    => '<span class="badge bg-warning text-dark">รอเช็ค</span>',
+                            };
+                        ?>
+                        <tr>
+                            <td data-label="ชื่อ-สกุล">
+                                <div class="fw-medium"><?= $nm_safe ?></div>
+                                <div class="text-muted small">@<?= htmlspecialchars($r['username'], ENT_QUOTES, 'UTF-8') ?></div>
+                            </td>
+                            <td data-label="การเข้าร่วม"><?= $st_badge ?></td>
+                            <td data-label="เกียรติบัตร" class="text-end text-nowrap">
+                                <?php if ($cert): ?>
+                                    <a href="<?= htmlspecialchars(APP_URL, ENT_QUOTES, 'UTF-8') ?>/api/download.php?type=cert&id=<?= (int)$cert['id'] ?>"
+                                       class="btn btn-sm btn-outline-warning" target="_blank" title="ดาวน์โหลด">
+                                        <i class="bi bi-download"></i>
+                                    </a>
+                                    <form method="POST" class="d-inline"
+                                          onsubmit="return confirm('ลบเกียรติบัตรของ &quot;<?= $nm_safe ?>&quot;?');">
+                                        <?= csrf_field() ?>
+                                        <input type="hidden" name="action" value="delete_cert">
+                                        <input type="hidden" name="_tab" value="tab-certs">
+                                        <input type="hidden" name="cert_id" value="<?= (int)$cert['id'] ?>">
+                                        <button type="submit" class="btn btn-sm btn-outline-danger" title="ลบ">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </form>
+                                <?php else: ?>
+                                    <button type="button" class="btn btn-sm btn-outline-primary upload-cert-btn"
+                                            data-user-id="<?= (int)$r['uid'] ?>"
+                                            data-user-name="<?= $nm_safe ?>">
+                                        <i class="bi bi-upload me-1"></i> อัปโหลด
+                                    </button>
+                                <?php endif; ?>
+                            </td>
+                        </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <?php endif; ?>
+    </div><!-- /tab-certs -->
+
+</div><!-- /tab-content -->
+
+<div class="modal fade" id="uploadCertModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-fullscreen-sm-down">
+        <div class="modal-content">
+            <form method="POST" enctype="multipart/form-data">
+                <?= csrf_field() ?>
+                <input type="hidden" name="action" value="upload_cert">
+                <input type="hidden" name="_tab" value="tab-certs">
+                <input type="hidden" name="cert_user_id" id="certUserId">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="bi bi-award me-1"></i>
+                        อัปโหลดเกียรติบัตร — <span id="certUserName"></span>
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <label for="certFileInput" class="form-label fw-medium">
+                        ไฟล์เกียรติบัตร <span class="text-danger">*</span>
+                    </label>
+                    <input type="file" id="certFileInput" name="cert_file" class="form-control"
+                           required accept=".pdf,.jpg,.jpeg,.png">
+                    <div class="form-text">
+                        PDF (≤ <?= $max_cert_pdf_mb ?> MB) / JPG, PNG (≤ <?= $max_cert_img_mb ?> MB)
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary"
+                            data-bs-dismiss="modal">ยกเลิก</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-upload me-1"></i> อัปโหลด
+                    </button>
+                </div>
+            </form>
+        </div>
     </div>
 </div>
 
@@ -976,6 +1185,17 @@ function appendPhoto(p) {
     photoGrid.appendChild(col);
 }
 <?php endif; ?>
+
+// ===== Cert upload modal =====
+document.querySelectorAll('.upload-cert-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        document.getElementById('certUserId').value = btn.dataset.userId;
+        document.getElementById('certUserName').textContent = btn.dataset.userName;
+        const fi = document.getElementById('certFileInput');
+        if (fi) fi.value = '';
+        new bootstrap.Modal(document.getElementById('uploadCertModal')).show();
+    });
+});
 </script>
 
 <?php require __DIR__ . '/../includes/footer.php'; ?>

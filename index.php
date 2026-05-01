@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/includes/auth.php';
 require_once __DIR__ . '/includes/csrf.php';
+require_once __DIR__ . '/includes/audit.php';
 
 if (is_logged_in()) {
     if (!empty($_SESSION['must_change_password'])) {
@@ -22,44 +23,72 @@ if (is_logged_in()) {
 $error = '';
 $timeout = isset($_GET['timeout']);
 
+// ---------------------------------------------------------------------------
+// Login rate limiting: max 10 failed attempts per IP per 15 minutes
+// ---------------------------------------------------------------------------
+$client_ip  = $_SERVER['REMOTE_ADDR'] ?? '';
+$rate_error = '';
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $rate_stmt = db()->prepare(
+        "SELECT COUNT(*) FROM audit_logs
+         WHERE action = 'login_failed'
+           AND ip_address = :ip
+           AND created_at >= DATE_SUB(NOW(), INTERVAL 15 MINUTE)"
+    );
+    $rate_stmt->execute([':ip' => $client_ip]);
+    $recent_failures = (int) $rate_stmt->fetchColumn();
+
+    if ($recent_failures >= 10) {
+        $rate_error = 'ลองเข้าสู่ระบบผิดพลาดหลายครั้ง กรุณารอ 15 นาทีแล้วลองใหม่';
+    }
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     verify_csrf_or_die();
 
-    $username = trim((string) ($_POST['username'] ?? ''));
-    $password = (string) ($_POST['password'] ?? '');
-
-    if ($username === '' || $password === '') {
-        $error = 'กรุณากรอกชื่อผู้ใช้และรหัสผ่าน';
+    if ($rate_error !== '') {
+        $error = $rate_error;
     } else {
-        $stmt = db()->prepare(
-            "SELECT id, username, password_hash, role,
-                    TRIM(CONCAT_WS(' ', NULLIF(prefix_name, ''), first_name, last_name)) AS display_name,
-                    department_id, must_change_password, is_active
-             FROM users
-             WHERE username = :u
-             LIMIT 1"
-        );
-        $stmt->execute([':u' => $username]);
-        $user = $stmt->fetch();
+        $username = trim((string) ($_POST['username'] ?? ''));
+        $password = (string) ($_POST['password'] ?? '');
 
-        if ($user && (int) $user['is_active'] === 1 && password_verify($password, $user['password_hash'])) {
-            login_user($user);
+        if ($username === '' || $password === '') {
+            $error = 'กรุณากรอกชื่อผู้ใช้และรหัสผ่าน';
+        } else {
+            $stmt = db()->prepare(
+                "SELECT id, username, password_hash, role,
+                        TRIM(CONCAT_WS(' ', NULLIF(prefix_name, ''), first_name, last_name)) AS display_name,
+                        department_id, must_change_password, is_active
+                 FROM users
+                 WHERE username = :u
+                 LIMIT 1"
+            );
+            $stmt->execute([':u' => $username]);
+            $user = $stmt->fetch();
 
-            if (!empty($_SESSION['must_change_password'])) {
-                header('Location: ' . APP_URL . '/change_password.php');
+            if ($user && (int) $user['is_active'] === 1 && password_verify($password, $user['password_hash'])) {
+                audit_log('login_success', 'users', (int) $user['id'], null,
+                    ['role' => $user['role']]);
+                login_user($user);
+
+                if (!empty($_SESSION['must_change_password'])) {
+                    header('Location: ' . APP_URL . '/change_password.php');
+                    exit;
+                }
+                $target = [
+                    'admin'    => '/admin/dashboard.php',
+                    'director' => '/director/dashboard.php',
+                    'employee' => '/employee/dashboard.php',
+                ][$user['role']] ?? '/index.php';
+                header('Location: ' . APP_URL . $target);
                 exit;
             }
-            $target = [
-                'admin'    => '/admin/dashboard.php',
-                'director' => '/director/dashboard.php',
-                'employee' => '/employee/dashboard.php',
-            ][$user['role']] ?? '/index.php';
-            header('Location: ' . APP_URL . $target);
-            exit;
-        }
 
-        sleep(1);
-        $error = 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง';
+            audit_log('login_failed', 'users', null, null,
+                ['username' => $username]);
+            sleep(1);
+            $error = 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง';
+        }
     }
 }
 ?>
@@ -67,7 +96,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <html lang="th">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>เข้าสู่ระบบ — <?= htmlspecialchars(APP_NAME, ENT_QUOTES, 'UTF-8') ?></title>
     <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">

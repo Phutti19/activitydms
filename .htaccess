@@ -1,0 +1,49 @@
+# ========================================
+# ActivityDMS — Apache Security Config
+# ========================================
+
+# Disable directory listing
+Options -Indexes
+
+# Remove server signature
+ServerSignature Off
+
+# Security response headers
+<IfModule mod_headers.c>
+    Header always set X-Content-Type-Options "nosniff"
+    Header always set X-Frame-Options "SAMEORIGIN"
+    Header always set X-XSS-Protection "1; mode=block"
+    Header always set Referrer-Policy "strict-origin-when-cross-origin"
+    Header always set Permissions-Policy "camera=(), microphone=(), geolocation=()"
+    Header unset X-Powered-By
+    Header always unset Server
+</IfModule>
+
+# Deny access to sensitive file types
+<FilesMatch "\.(env|env\.example|sql|log|lock|yml|yaml|ini|sh|bat|htpasswd)$">
+    Require all denied
+</FilesMatch>
+
+# Protect hidden directories and files
+<FilesMatch "^\.">
+    Require all denied
+</FilesMatch>
+
+# Protect .git, .svn
+<DirectoryMatch "(\.git|\.svn)">
+    Require all denied
+</DirectoryMatch>
+
+# PHP hardening
+<IfModule mod_php8.c>
+    php_flag display_errors Off
+    php_flag log_errors On
+    php_flag session.use_strict_mode On
+    php_flag session.cookie_httponly On
+    php_value session.use_trans_sid 0
+</IfModule>
+
+# Custom error pages
+ErrorDocument 403 /errors/403.php
+ErrorDocument 404 /errors/404.php
+ErrorDocument 500 /errors/500.php
