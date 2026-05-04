@@ -76,8 +76,8 @@ $dept_params = $fy_id > 0 ? [':fy_d' => $fy_id] : [];
 $dept_stmt   = $pdo->prepare(
     'SELECT d.name AS dept_name,
             COUNT(DISTINCT u.id) AS member_count,
-            COUNT(DISTINCT r.id) AS reg_count,
-            SUM(r.status = "attended") AS attended
+            COUNT(DISTINCT CASE WHEN a.id IS NOT NULL THEN r.id END) AS reg_count,
+            SUM(CASE WHEN a.id IS NOT NULL AND r.status = "attended" THEN 1 ELSE 0 END) AS attended
      FROM departments d
      LEFT JOIN users u ON u.department_id = d.id AND u.is_active = 1 AND u.role = "employee"
      LEFT JOIN activity_registrations r ON r.user_id = u.id

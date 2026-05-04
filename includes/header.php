@@ -45,7 +45,7 @@ $menus = [
 $menu = $menus[$role] ?? [];
 
 $initial = mb_substr(trim($display_name), 0, 1, 'UTF-8') ?: '?';
-$role_label = ['admin'=>'ผู้ดูแลระบบ', 'director'=>'ผู้อำนวยการ', 'employee'=>'พนักงาน'][$role] ?? '';
+$header_role_label = ['admin'=>'ผู้ดูแลระบบ', 'director'=>'ผู้อำนวยการ', 'employee'=>'พนักงาน'][$role] ?? '';
 $app_url = htmlspecialchars(APP_URL, ENT_QUOTES, 'UTF-8');
 ?>
 <!DOCTYPE html>
@@ -107,7 +107,7 @@ $app_url = htmlspecialchars(APP_URL, ENT_QUOTES, 'UTF-8');
                     <?= htmlspecialchars($display_name, ENT_QUOTES, 'UTF-8') ?>
                 </div>
                 <span class="badge-pill badge-role-<?= htmlspecialchars($role, ENT_QUOTES, 'UTF-8') ?>">
-                    <?= htmlspecialchars($role_label, ENT_QUOTES, 'UTF-8') ?>
+                    <?= htmlspecialchars($header_role_label, ENT_QUOTES, 'UTF-8') ?>
                 </span>
             </div>
         </div>

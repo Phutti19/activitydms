@@ -134,8 +134,9 @@ $q = trim((string)($_GET['q'] ?? ''));
 $where  = ['a.scope = "personal"', 'a.created_by = :uid'];
 $params = [':uid' => $uid];
 if ($q !== '') {
-    $where[] = '(a.title LIKE :q OR a.location LIKE :q)';
-    $params[':q'] = '%' . $q . '%';
+    $where[] = '(a.title LIKE :q OR a.location LIKE :q2)';
+    $params[':q']  = '%' . $q . '%';
+    $params[':q2'] = '%' . $q . '%';
 }
 
 $stmt = $pdo->prepare(

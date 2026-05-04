@@ -83,9 +83,9 @@ if ($f_type   > 0) { $dept_where[] = 'a.activity_type_id = :t2'; $dept_params[':
 
 $dept_sql = '
     SELECT d.name AS dept_name,
-           COUNT(DISTINCT r.id)               AS reg_count,
-           SUM(r.status = "attended")          AS attended,
-           SUM(r.status = "absent")            AS absent,
+           COUNT(DISTINCT CASE WHEN a.id IS NOT NULL THEN r.id END)               AS reg_count,
+           SUM(CASE WHEN a.id IS NOT NULL AND r.status = "attended" THEN 1 ELSE 0 END) AS attended,
+           SUM(CASE WHEN a.id IS NOT NULL AND r.status = "absent"   THEN 1 ELSE 0 END) AS absent,
            COUNT(DISTINCT u.id)               AS member_count
     FROM departments d
     LEFT JOIN users u ON u.department_id = d.id AND u.is_active = 1 AND u.role = "employee"

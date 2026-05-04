@@ -103,7 +103,7 @@ body {
 .app-sidebar { view-transition-name: app-sidebar; }
 @keyframes page-enter {
     from { opacity: 0; transform: translateY(6px); }
-    to   { opacity: 1; transform: translateY(0); }
+    to   { opacity: 1; transform: none; }
 }
 .app-main > .card,
 .app-main > .row > [class*="col-"] > .card {
@@ -111,7 +111,7 @@ body {
 }
 @keyframes card-enter {
     from { opacity: 0; transform: translateY(8px) scale(.99); }
-    to   { opacity: 1; transform: translateY(0)   scale(1); }
+    to   { opacity: 1; transform: none; }
 }
 
 /* ใช้ View Transitions API บน browser ที่รองรับ (Chrome 126+) — fallback CSS animation ข้างบนทำงานทุกเบราเซอร์ */

@@ -14,8 +14,9 @@ $where  = ['r.user_id = :uid', 'a.scope = "organization"'];
 $params = [':uid' => $uid];
 
 if ($q !== '') {
-    $where[] = '(a.title LIKE :q OR a.location LIKE :q)';
-    $params[':q'] = '%' . $q . '%';
+    $where[] = '(a.title LIKE :q OR a.location LIKE :q2)';
+    $params[':q']  = '%' . $q . '%';
+    $params[':q2'] = '%' . $q . '%';
 }
 if (in_array($f_status, ['registered', 'attended', 'absent'], true)) {
     $where[] = 'r.status = :rs';

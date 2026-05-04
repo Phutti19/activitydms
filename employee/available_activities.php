@@ -89,8 +89,9 @@ $where  = ['a.scope = "organization"', 'a.is_open_registration = 1'];
 $params = [];
 
 if ($q !== '') {
-    $where[] = '(a.title LIKE :q OR a.location LIKE :q)';
-    $params[':q'] = '%' . $q . '%';
+    $where[] = '(a.title LIKE :q OR a.location LIKE :q2)';
+    $params[':q']  = '%' . $q . '%';
+    $params[':q2'] = '%' . $q . '%';
 }
 if ($f_time === 'upcoming')  $where[] = 'a.start_datetime > NOW()';
 if ($f_time === 'ongoing')   $where[] = 'a.start_datetime <= NOW() AND a.end_datetime >= NOW()';

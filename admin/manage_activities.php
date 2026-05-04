@@ -75,8 +75,9 @@ $where  = ['a.scope = "organization"'];
 $params = [];
 
 if ($q !== '') {
-    $where[] = '(a.title LIKE :q OR a.location LIKE :q)';
-    $params[':q'] = '%' . $q . '%';
+    $where[] = '(a.title LIKE :q OR a.location LIKE :q2)';
+    $params[':q']  = '%' . $q . '%';
+    $params[':q2'] = '%' . $q . '%';
 }
 if ($f_type > 0)   { $where[] = 'a.activity_type_id = :t'; $params[':t'] = $f_type; }
 if ($f_fiscal > 0) { $where[] = 'a.fiscal_year_id = :fy'; $params[':fy'] = $f_fiscal; }

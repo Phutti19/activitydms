@@ -219,9 +219,12 @@ $f_state = $_GET['status'] ?? '';
 $where = ['1=1'];
 $params = [];
 if ($q !== '') {
-    $where[] = '(u.username LIKE :q OR u.email LIKE :q OR u.staff_code LIKE :q
-                 OR CONCAT_WS(\' \', u.first_name, u.last_name) LIKE :q)';
-    $params[':q'] = '%' . $q . '%';
+    $where[] = '(u.username LIKE :q OR u.email LIKE :q2 OR u.staff_code LIKE :q3
+                 OR CONCAT_WS(\' \', u.first_name, u.last_name) LIKE :q4)';
+    $params[':q']  = '%' . $q . '%';
+    $params[':q2'] = '%' . $q . '%';
+    $params[':q3'] = '%' . $q . '%';
+    $params[':q4'] = '%' . $q . '%';
 }
 if ($f_dept > 0) {
     $where[] = 'u.department_id = :d';
