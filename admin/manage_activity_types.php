@@ -94,13 +94,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     exit;
 }
 
-$types = db()->query(
+$types_stmt = db()->prepare(
     'SELECT t.*, COUNT(a.id) AS activity_count
      FROM activity_types t
      LEFT JOIN activities a ON a.activity_type_id = t.id
      GROUP BY t.id
      ORDER BY t.id ASC'
-)->fetchAll();
+);
+$types_stmt->execute();
+$types = $types_stmt->fetchAll();
 
 $page_title  = 'ประเภทกิจกรรม';
 $page_active = 'manage_activity_types';

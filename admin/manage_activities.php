@@ -102,8 +102,13 @@ $stmt = db()->prepare($sql);
 $stmt->execute($params);
 $activities = $stmt->fetchAll();
 
-$types = db()->query('SELECT id, name, color FROM activity_types WHERE is_active = 1 ORDER BY id')->fetchAll();
-$years = db()->query('SELECT id, name FROM fiscal_years ORDER BY start_year DESC')->fetchAll();
+$types_stmt = db()->prepare('SELECT id, name, color FROM activity_types WHERE is_active = 1 ORDER BY id');
+$types_stmt->execute();
+$types = $types_stmt->fetchAll();
+
+$years_stmt = db()->prepare('SELECT id, name FROM fiscal_years ORDER BY start_year DESC');
+$years_stmt->execute();
+$years = $years_stmt->fetchAll();
 
 function time_status_of(array $a): array {
     $now = time();

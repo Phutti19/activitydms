@@ -1,5 +1,11 @@
 .env
-uploads/
+uploads/*
+!uploads/meetings/
+!uploads/documents/
+!uploads/activities/
+!uploads/certificates/
+uploads/*/*
+!uploads/*/.gitkeep
 *.log
 node_modules/
 vendor/

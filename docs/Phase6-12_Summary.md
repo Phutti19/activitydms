@@ -61,17 +61,20 @@ WHERE ar.user_id = :session_user_id AND a.scope = 'organization'
 
 | ไฟล์ | Action |
 |---|---|
-| `employee/available_activities.php` | เพิ่มปุ่ม "สมัครเข้าร่วม" + CSRF POST |
-| `api/register_activity.php` | ใหม่ — API endpoint รับ POST สมัคร/ยกเลิก |
+| `employee/available_activities.php` | เพิ่มปุ่ม "สมัครเข้าร่วม"/"ยกเลิก" + CSRF POST + handler inline (action=register / unregister) |
 | `admin/activity_view.php` | เพิ่ม tab "ผู้สมัคร" แสดงรายชื่อ + เช็คชื่อ |
 
-### Logic การสมัคร
+> หมายเหตุ: ในสเปคต้นฉบับเสนอแยกเป็น `api/register_activity.php` แต่ implement จริงเลือกฝัง logic ไว้ใน `employee/available_activities.php` (block `if ($_SERVER['REQUEST_METHOD'] === 'POST')`) เพื่อให้ flash message + redirect กลับหน้าเดิมได้สะดวก ไม่ต้องสร้าง endpoint แยก
 
-1. ตรวจ `is_open_registration = 1` + `scope = 'organization'`
-2. ตรวจ capacity (ถ้า `max_participants > 0`) — ห้ามเกิน
+### Logic การสมัคร (`employee/available_activities.php:41-76`)
+
+1. ตรวจ `is_open_registration = 1` + `scope = 'organization'` (ก่อนถึง action handler)
+2. ห้ามสมัครหลัง `end_datetime < NOW()`
 3. INSERT `activity_registrations` status = `'registered'`
-4. Trigger `new_activity` email notification ถ้าผู้ใช้เปิดแจ้งเตือน
-5. ซ้ำ: ถ้า record มีอยู่แล้ว → ไม่ insert (Unique key `activity_id, user_id` กัน)
+4. ถ้า `PDOException` code `'23000'` (UNIQUE `activity_id, user_id`) → flash "ลงทะเบียนแล้ว"
+5. Unregister: DELETE เฉพาะ record ของตัวเองที่ `status = 'registered'` (ห้ามยกเลิกถ้าเช็คชื่อไปแล้ว)
+
+> ⚠️ ในโค้ดยังไม่มีการเช็ค `max_participants` capacity — ถ้าจะเพิ่มต้อง implement ใน Phase ถัดไป
 
 ---
 

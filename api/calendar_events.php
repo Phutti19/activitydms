@@ -102,7 +102,9 @@ if ($role === 'employee') {
     );
     $stmt->execute($params);
 
+    $registered_ids = [];
     foreach ($stmt->fetchAll() as $a) {
+        $registered_ids[(int)$a['id']] = true;
         $color = preg_match('/^#[0-9a-fA-F]{6}$/', (string)$a['type_color'])
             ? $a['type_color'] : '#0EA5E9';
         // ขอบทึบ = registered, จาง = absent
@@ -120,6 +122,40 @@ if ($role === 'employee') {
                 'type'     => $a['type_name'] ?? '',
                 'location' => $a['location'] ?? '',
                 'status'   => $a['reg_status'],
+            ],
+        ];
+    }
+
+    // Open-registration org activities (กิจกรรมที่ admin เปิดให้สมัคร แต่ employee ยังไม่ได้ลงทะเบียน)
+    $where_open  = ['a.scope = "organization"', 'a.is_open_registration = 1'];
+    $params_open = [];
+    if ($start !== null) { $where_open[] = 'a.end_datetime >= :so';   $params_open[':so'] = $start . ' 00:00:00'; }
+    if ($end   !== null) { $where_open[] = 'a.start_datetime <= :eo'; $params_open[':eo'] = $end   . ' 23:59:59'; }
+
+    $stmt_open = $pdo->prepare(
+        'SELECT a.id, a.title, a.start_datetime, a.end_datetime, a.location,
+                t.name AS type_name
+         FROM activities a
+         LEFT JOIN activity_types t ON t.id = a.activity_type_id
+         WHERE ' . implode(' AND ', $where_open) . '
+         ORDER BY a.start_datetime'
+    );
+    $stmt_open->execute($params_open);
+
+    foreach ($stmt_open->fetchAll() as $a) {
+        if (isset($registered_ids[(int)$a['id']])) continue; // ลงทะเบียนแล้ว ข้าม
+        $events[] = [
+            'id'            => 'open_' . $a['id'],
+            'title'         => '📢 ' . $a['title'],
+            'start'         => $a['start_datetime'],
+            'end'           => $a['end_datetime'],
+            'color'         => '#F59E0B',
+            'borderColor'   => '#D97706',
+            'url'           => APP_URL . '/employee/available_activities.php',
+            'extendedProps' => [
+                'type'     => $a['type_name'] ?? '',
+                'location' => $a['location'] ?? '',
+                'status'   => 'open',
             ],
         ];
     }

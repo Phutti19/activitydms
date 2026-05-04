@@ -121,13 +121,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     exit;
 }
 
-$years = db()->query(
+$years_stmt = db()->prepare(
     'SELECT fy.*, COUNT(a.id) AS activity_count
      FROM fiscal_years fy
      LEFT JOIN activities a ON a.fiscal_year_id = fy.id
      GROUP BY fy.id
      ORDER BY fy.start_year DESC, fy.id DESC'
-)->fetchAll();
+);
+$years_stmt->execute();
+$years = $years_stmt->fetchAll();
 
 $current_year = (int)date('Y');
 

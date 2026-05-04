@@ -13,11 +13,15 @@ $pdo = db();
 $f_fiscal = (int)($_GET['fiscal'] ?? 0);
 $f_status = $_GET['status'] ?? '';
 
-$years = $pdo->query('SELECT id, name FROM fiscal_years ORDER BY start_year DESC')->fetchAll();
+$years_stmt = $pdo->prepare('SELECT id, name FROM fiscal_years ORDER BY start_year DESC');
+$years_stmt->execute();
+$years = $years_stmt->fetchAll();
 
 // Default to active fiscal year
 if ($f_fiscal === 0 && !isset($_GET['fiscal'])) {
-    $fy_active = $pdo->query('SELECT id FROM fiscal_years WHERE is_active = 1 LIMIT 1')->fetch();
+    $fy_stmt = $pdo->prepare('SELECT id FROM fiscal_years WHERE is_active = 1 LIMIT 1');
+    $fy_stmt->execute();
+    $fy_active = $fy_stmt->fetch();
     if ($fy_active) $f_fiscal = (int)$fy_active['id'];
 }
 

@@ -129,14 +129,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 $filter_activity = (int)($_GET['activity_id'] ?? 0);
 $q_user          = trim((string)($_GET['q'] ?? ''));
 
-$act_list = $pdo->query(
+$act_stmt = $pdo->prepare(
     'SELECT id, title FROM activities WHERE scope = "organization" ORDER BY start_datetime DESC'
-)->fetchAll();
+);
+$act_stmt->execute();
+$act_list = $act_stmt->fetchAll();
 
-$users_list = $pdo->query(
+$users_stmt = $pdo->prepare(
     "SELECT id, TRIM(CONCAT_WS(' ', prefix_name, first_name, last_name)) AS fullname, email
      FROM users WHERE is_active = 1 ORDER BY first_name"
-)->fetchAll();
+);
+$users_stmt->execute();
+$users_list = $users_stmt->fetchAll();
 
 $where  = 'WHERE 1=1';
 $params = [];

@@ -14,7 +14,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     verify_csrf_or_die();
 
     // ดึง keys ทั้งหมดจาก DB แล้ว update ทีละ key
-    $keys_stmt = $pdo->query('SELECT setting_key FROM notification_settings');
+    $keys_stmt = $pdo->prepare('SELECT setting_key FROM notification_settings');
+    $keys_stmt->execute();
     $all_keys  = $keys_stmt->fetchAll(PDO::FETCH_COLUMN);
 
     $upd = $pdo->prepare(
@@ -36,14 +37,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 // ดึงค่าทั้งหมด
-$rows = $pdo->query(
+$rows_stmt = $pdo->prepare(
     'SELECT setting_key, setting_value, label FROM notification_settings ORDER BY id'
-)->fetchAll();
+);
+$rows_stmt->execute();
+$rows = $rows_stmt->fetchAll();
 
 // ดึงสถิติ queue
-$queue_stats = $pdo->query(
+$queue_stmt = $pdo->prepare(
     "SELECT status, COUNT(*) AS cnt FROM email_queue GROUP BY status"
-)->fetchAll();
+);
+$queue_stmt->execute();
+$queue_stats = $queue_stmt->fetchAll();
 $stats = array_column($queue_stats, 'cnt', 'status');
 
 // 50 อีเมลล่าสุดจาก email_queue (แสดงประวัติ)

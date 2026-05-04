@@ -144,8 +144,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 $form = $_SESSION['_form_activity'] ?? null;
 unset($_SESSION['_form_activity']);
 
-$types = db()->query('SELECT id, name FROM activity_types WHERE is_active = 1 ORDER BY id')->fetchAll();
-$years = db()->query('SELECT id, name, is_active FROM fiscal_years ORDER BY start_year DESC')->fetchAll();
+$types_stmt = db()->prepare('SELECT id, name FROM activity_types WHERE is_active = 1 ORDER BY id');
+$types_stmt->execute();
+$types = $types_stmt->fetchAll();
+
+$years_stmt = db()->prepare('SELECT id, name, is_active FROM fiscal_years ORDER BY start_year DESC');
+$years_stmt->execute();
+$years = $years_stmt->fetchAll();
 
 $val = function(string $key, $default = '') use ($form, $activity) {
     if ($form !== null && isset($form[$key])) return $form[$key];

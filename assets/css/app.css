@@ -11,10 +11,10 @@
     --color-sidebar-active: #1E40AF;
     --color-sidebar-text:   #E2E8F0;
     --color-sidebar-muted:  #94A3B8;
-    --color-bg:             #B6C2D6;   /* main bg — deep pastel slate-blue */
-    --color-bg-2:           #A6B4CB;   /* gradient ปลาย ให้ลึกขึ้น */
-    --color-surface:        #E2E8F0;   /* card / panel — soft pastel */
-    --color-surface-2:      #D5DDE9;   /* card header / subdued */
+    --color-bg:             #E8ECF2;   /* main bg — soft slate นุ่มตา */
+    --color-bg-2:           #DCE2EB;   /* gradient ปลาย — ลึกขึ้นนิด */
+    --color-surface:        #FAFBFC;   /* card / panel — off-white นุ่ม */
+    --color-surface-2:      #EEF1F6;   /* card header / subdued */
     --color-border:         #94A3B8;
     --color-border-subtle:  #B6C2D6;
     --color-text:           #0F172A;
@@ -31,6 +31,18 @@ body {
     background: linear-gradient(180deg, var(--color-bg) 0%, var(--color-bg-2) 100%);
     background-attachment: fixed;
     color: var(--color-text);
+}
+
+/* ซ่อน scrollbar ของหน้าเว็บ (ยังเลื่อนได้ปกติด้วย mouse wheel / touch / keyboard) */
+html {
+    scrollbar-width: none;          /* Firefox */
+    -ms-overflow-style: none;       /* IE/Edge legacy */
+}
+html::-webkit-scrollbar,
+body::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+    display: none;                  /* Chrome / Safari / Edge ใหม่ */
 }
 
 /* ===== Layout ===== */
@@ -95,12 +107,10 @@ body {
     padding: 16px;
     min-width: 0;          /* กันลูก grid ดัน main เกินจอ */
     max-width: 100%;
-    /* fade + slide-in สั้น ๆ ตอนเปลี่ยนหน้า */
-    animation: page-enter 0.32s cubic-bezier(.4, 0, .2, 1) both;
-    /* View Transitions API ใช้ชื่อนี้แยกจาก root → sidebar จะไม่กระพริบ */
-    view-transition-name: page-main;
 }
-.app-sidebar { view-transition-name: app-sidebar; }
+/* NOTE: ห้ามใส่ transform / view-transition-name / will-change: transform / filter / contain:paint
+   บน .app-main เด็ดขาด — จะทำให้ .app-main กลายเป็น containing block ของ position:fixed
+   ทำให้ Bootstrap modal ถูก backdrop ครอบจนคลิกไม่ได้ */
 @keyframes page-enter {
     from { opacity: 0; transform: translateY(6px); }
     to   { opacity: 1; transform: none; }
@@ -154,12 +164,15 @@ body {
     ::view-transition-old(*),
     ::view-transition-new(*) { animation: none !important; }
 }
-@media (min-width: 768px) { .app-main { padding: 24px; } }
+@media (min-width: 768px) { .app-main { padding: 18px 16px; } }
 @media (min-width: 992px) {
     .app-main {
-        padding: 28px 32px;
+        padding: 20px 18px;
         max-width: calc(100vw - 260px);   /* กัน card ล้นจอด้านขวา */
     }
+}
+@media (min-width: 1400px) {
+    .app-main { padding: 22px 20px; }
 }
 
 /* ===== Top Navbar (mobile/tablet) ===== */
@@ -265,6 +278,47 @@ body {
 .form-control:focus, .form-select:focus {
     border-color: var(--color-primary);
     box-shadow: 0 0 0 3px rgba(14,165,233,0.15);
+}
+/* select: ลดที่ว่างของลูกศรให้พอดีกับข้อความไทย + ellipsis เผื่อเมื่อช่องโดนบีบ */
+.form-select {
+    padding-right: 2rem;
+    background-position: right 0.6rem center;
+    background-size: 14px 10px;
+    text-overflow: ellipsis;
+}
+
+/* ===== Filter forms (GET search/filter) =====
+   ทำให้คอลัมน์ของ filter row flex-grow ตามเนื้อหา และมี min-width พอสำหรับข้อความไทย
+   ("ทุกสถานะเวลา", "ทุกแผนก", "ทุกประเภท" ฯลฯ) — แก้ทุกหน้าทีเดียวโดยไม่ต้องแก้ markup
+   ใช้ attribute selector case-insensitive (i flag) เพื่อรับทั้ง method="GET"/"get" */
+form[method="GET" i].card > .row,
+form[method="get" i].card > .row {
+    flex-wrap: wrap;
+}
+form[method="GET" i].card > .row > [class*="col-"],
+form[method="get" i].card > .row > [class*="col-"] {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+/* select: min-width แค่พอให้ปุ่ม dropdown + ข้อความสั้น ๆ เช่น "ทุกปี" / "ทุกประเภท" แสดงเต็ม
+   ถ้ามี option ยาวกว่านี้ flex-grow จะแบ่งที่ว่างที่เหลือให้เอง */
+form[method="GET" i].card > .row > [class*="col-"]:has(.form-select),
+form[method="get" i].card > .row > [class*="col-"]:has(.form-select) {
+    min-width: 6.5rem;
+    flex: 1 1 7rem;
+}
+/* input: ยอมให้แคบกว่า เพราะ placeholder ตัดได้โดยไม่กระทบฟังก์ชัน */
+form[method="GET" i].card > .row > [class*="col-"]:has(.form-control:not([type="hidden"])),
+form[method="get" i].card > .row > [class*="col-"]:has(.form-control:not([type="hidden"])) {
+    min-width: 7rem;
+    flex: 2 1 12rem;   /* input โตเป็น 2 เท่าของ select เมื่อมีที่ว่าง */
+}
+form[method="GET" i].card > .row > [class*="col-"]:has(> button[type="submit"]),
+form[method="get" i].card > .row > [class*="col-"]:has(> button[type="submit"]),
+form[method="GET" i].card > .row > [class*="col-"]:has(> a.btn),
+form[method="get" i].card > .row > [class*="col-"]:has(> a.btn) {
+    min-width: 3rem;
+    flex: 0 0 auto;
 }
 
 /* ===== Buttons ===== */
@@ -400,6 +454,117 @@ a > .card:hover,
 @media (min-width: 576px) {
     .nav-tabs .nav-link { font-size: inherit; padding: 8px 16px; }
 }
+
+/* ===== FullCalendar — custom theme ให้เข้ากับ design system =====
+   FullCalendar default ใช้สีอ่อนกับขาวล้วน ชนกับ background gradient ของแอปเลยดูจาง */
+.fc {
+    --fc-border-color: #CBD5E1;
+    --fc-page-bg-color: #FFFFFF;
+    --fc-neutral-bg-color: #F8FAFC;
+    --fc-list-event-hover-bg-color: #EFF6FF;
+    --fc-today-bg-color: #FEF3C7;       /* เหลืองอ่อนชัดขึ้นกว่า default */
+    --fc-event-bg-color: var(--color-primary);
+    --fc-event-border-color: var(--color-primary-dark);
+    --fc-event-text-color: #FFFFFF;
+    --fc-button-bg-color: #FFFFFF;
+    --fc-button-border-color: #CBD5E1;
+    --fc-button-text-color: var(--color-text);
+    --fc-button-hover-bg-color: #F1F5F9;
+    --fc-button-hover-border-color: #94A3B8;
+    --fc-button-active-bg-color: var(--color-primary);
+    --fc-button-active-border-color: var(--color-primary-dark);
+    font-family: inherit;
+    color: var(--color-text);
+    background: #FFFFFF;
+    border-radius: 12px;
+    overflow: hidden;
+}
+/* Toolbar (prev/next/today + view buttons) */
+.fc .fc-toolbar-title {
+    font-size: 20px;
+    font-weight: 600;
+    color: var(--color-text);
+}
+.fc .fc-button {
+    font-weight: 500;
+    font-family: inherit;
+    border-radius: 8px;
+    box-shadow: none;
+    text-transform: none;
+    padding: 6px 14px;
+    transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+.fc .fc-button-primary:not(:disabled).fc-button-active,
+.fc .fc-button-primary:not(:disabled):active {
+    color: #FFFFFF;
+    background: linear-gradient(135deg, var(--color-primary), var(--color-primary-dark));
+    border-color: var(--color-primary-dark);
+    box-shadow: 0 2px 6px rgba(30, 64, 175, 0.25);
+}
+.fc .fc-button-primary:focus {
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.18);
+}
+.fc .fc-button .fc-icon { font-size: 1.2em; }
+
+/* Day grid header (อา. จ. อ. พ. ...) — เลิกใต้เส้นที่ดูเหมือน link */
+.fc .fc-col-header-cell {
+    background: #F1F5F9;
+    border-color: var(--fc-border-color);
+}
+.fc .fc-col-header-cell-cushion {
+    color: var(--color-text-muted);
+    font-weight: 600;
+    font-size: 13px;
+    padding: 10px 6px;
+    text-decoration: none !important;
+    text-transform: none;
+}
+
+/* Day numbers ในเซลล์ */
+.fc .fc-daygrid-day-number {
+    color: var(--color-text);
+    font-weight: 500;
+    font-size: 13px;
+    padding: 6px 8px;
+    text-decoration: none !important;
+}
+.fc .fc-day-other .fc-daygrid-day-number { opacity: 0.4; }
+.fc .fc-day-today .fc-daygrid-day-number {
+    color: var(--color-primary-dark);
+    font-weight: 700;
+}
+
+/* Today highlight */
+.fc .fc-day-today {
+    background: var(--fc-today-bg-color) !important;
+}
+
+/* Saturday / Sunday tint อ่อน ๆ */
+.fc .fc-day-sat,
+.fc .fc-day-sun { background: rgba(248, 250, 252, 0.6); }
+
+/* Events */
+.fc-event {
+    cursor: pointer;
+    border-radius: 6px;
+    border-width: 1px;
+    padding: 1px 4px;
+    font-size: 12px;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+    transition: filter 0.15s, transform 0.15s;
+}
+.fc-event:hover {
+    filter: brightness(0.92);
+    transform: translateY(-1px);
+}
+.fc-event-title { font-weight: 500; }
+.fc-daygrid-event-dot { display: none; } /* ใช้สีพื้น event แทน dot */
+.fc-daygrid-event { white-space: normal; }
+
+/* List view (mobile) */
+.fc .fc-list-day-cushion { background: #F1F5F9; }
+.fc .fc-list-event-title a { text-decoration: none !important; }
+.fc .fc-list-empty { background: #F8FAFC; }
 
 /* ===== FullCalendar mobile ===== */
 @media (max-width: 540px) {
