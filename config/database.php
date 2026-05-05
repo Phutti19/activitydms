@@ -18,11 +18,19 @@ function db(): PDO
         $_ENV['DB_CHARSET']
     );
 
+    // Use the modern Pdo\Mysql constant on PHP 8.4+, fall back to the
+    // legacy PDO::MYSQL_ATTR_INIT_COMMAND on older runtimes. The legacy
+    // constant is deprecated in 8.5 (and the project escalates deprecations
+    // to fatal), while the new class is missing entirely on 8.3 and below.
+    $init_cmd_attr = class_exists('Pdo\\Mysql')
+        ? \Pdo\Mysql::ATTR_INIT_COMMAND
+        : PDO::MYSQL_ATTR_INIT_COMMAND;
+
     $options = [
         PDO::ATTR_ERRMODE              => PDO::ERRMODE_EXCEPTION,
         PDO::ATTR_DEFAULT_FETCH_MODE   => PDO::FETCH_ASSOC,
         PDO::ATTR_EMULATE_PREPARES     => false,  // native prepared statements
-        Pdo\Mysql::ATTR_INIT_COMMAND   => "SET NAMES " . $_ENV['DB_CHARSET'] . " COLLATE utf8mb4_unicode_ci",
+        $init_cmd_attr                 => "SET NAMES " . $_ENV['DB_CHARSET'] . " COLLATE utf8mb4_unicode_ci",
     ];
 
     try {

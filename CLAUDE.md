@@ -2,7 +2,7 @@
 
 > ไฟล์นี้สำหรับ Claude / AI assistant อ่านก่อนเริ่มทำงานในโปรเจกต์
 > Single source of truth ของสเปคเต็ม: **`docs/ActivityDMS_Spec_v1_1.md`**
-> Schema เต็ม: **`database.sql`**
+> Schema เต็ม: **`database/schema.sql`**
 
 ---
 
@@ -80,8 +80,10 @@ activitydms/
 │   ├── mailer.php          # send_email() → enqueue
 │   ├── header.php / footer.php
 ├── cron/send_emails.php    # cron ทุก 5 นาที
-├── uploads/                # นอก public root, git-ignore
-│   ├── meetings/ documents/ activities/ certificates/
+├── database/               # SQL — ห้าม serve ผ่าน web (.htaccess block)
+│   ├── schema.sql
+│   └── seed_mock_data.sql
+# uploads อยู่ "นอก" project root — กำหนดผ่าน .env: UPLOAD_PATH
 ├── admin/    (ขั้นต่ำ 8 ไฟล์ตามสเปค §8 — แต่ Phase 3 ต้อง `manage_activity_types.php` และ Figma A12 มี admin calendar; รวมจริงราว 9–10 ไฟล์)
 ├── director/ (3 ไฟล์: dashboard / reports / calendar)
 ├── employee/ (7 ไฟล์)
@@ -92,7 +94,7 @@ activitydms/
 ├── index.php               # login + router
 ├── change_password.php
 ├── logout.php
-└── database.sql            # schema + seed
+└── (no SQL ที่ root — ย้ายไป database/ แล้ว)
 ```
 
 **กฎโครงสร้าง:**
@@ -101,7 +103,7 @@ activitydms/
 
 ---
 
-## 5. Database (14 ตาราง — ดู `database.sql`)
+## 5. Database (14 ตาราง — ดู `database/schema.sql`)
 
 `departments` → `users` → `activities` → `activity_photos` / `activity_attachments` / `activity_registrations` → `documents` / `certificates` + `email_queue` / `email_logs` / `notification_settings` / `audit_logs` + `fiscal_years` / `activity_types`
 
@@ -114,7 +116,7 @@ activitydms/
 - Unique keys ที่ห้ามลืม: `users.username`, `users.email`, `activity_registrations(activity_id, user_id)`, `certificates(activity_id, user_id)`
 
 **แก้ schema:**
-- ทุกครั้งที่เพิ่ม/แก้ตาราง → อัปเดต `database.sql` ด้วย **ห้ามแก้แค่ DB จริง**
+- ทุกครั้งที่เพิ่ม/แก้ตาราง → อัปเดต `database/schema.sql` ด้วย **ห้ามแก้แค่ DB จริง**
 - ใช้ `utf8mb4_unicode_ci` ทุกตาราง (รองรับภาษาไทย + emoji)
 
 ---
@@ -197,7 +199,7 @@ if (
 
 **Setup ครั้งแรก:**
 ```bash
-mysql -u root -p < database.sql
+mysql -u root -p < database/schema.sql
 cp .env.example .env   # แก้ DB + SMTP
 php -S localhost:8000  # ทดสอบ local
 ```
@@ -224,7 +226,7 @@ php -S localhost:8000  # ทดสอบ local
 ทำตามลำดับ phase 1 → 12 (ดูสเปคข้อ 10) — อย่ากระโดดข้าม phase
 
 ตอนนี้สถานะ:
-- ✅ Phase 1: Schema + seed STAFF_ARIT (`database.sql` พร้อมแล้ว)
+- ✅ Phase 1: Schema + seed STAFF_ARIT (`database/schema.sql` พร้อมแล้ว)
 - ⏭️ Phase 2: Login + auth + role guard ← **เริ่มที่นี่**
 
 ---

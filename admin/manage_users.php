@@ -30,6 +30,20 @@ $departments = $dept_stmt->fetchAll();
 $dept_map = [];
 foreach ($departments as $d) $dept_map[(int)$d['id']] = $d['name'];
 
+// Distinct values สำหรับ datalist autocomplete (ตำแหน่ง / ประเภทบุคลากร)
+// — admin ยังพิมพ์ค่าใหม่เองได้ ค่าใหม่จะปรากฏใน list ครั้งถัดไปอัตโนมัติ
+$pos_stmt = db()->query(
+    "SELECT DISTINCT position_name FROM users
+     WHERE position_name <> '' ORDER BY position_name"
+);
+$position_options = $pos_stmt->fetchAll(PDO::FETCH_COLUMN);
+
+$st_stmt = db()->query(
+    "SELECT DISTINCT staff_type FROM users
+     WHERE staff_type <> '' ORDER BY staff_type"
+);
+$staff_type_options = $st_stmt->fetchAll(PDO::FETCH_COLUMN);
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     verify_csrf_or_die();
     $action      = $_POST['action'] ?? '';
@@ -441,11 +455,25 @@ require __DIR__ . '/../includes/header.php';
                         </div>
                         <div class="col-12 col-md-4">
                             <label for="uPosition" class="form-label small fw-medium">ตำแหน่ง</label>
-                            <input type="text" id="uPosition" name="position_name" class="form-control" maxlength="150">
+                            <input type="text" id="uPosition" name="position_name" class="form-control"
+                                   list="positionOptions" maxlength="150"
+                                   autocomplete="off" placeholder="เลือกหรือพิมพ์ตำแหน่ง">
+                            <datalist id="positionOptions">
+                                <?php foreach ($position_options as $opt): ?>
+                                    <option value="<?= htmlspecialchars((string)$opt, ENT_QUOTES, 'UTF-8') ?>"></option>
+                                <?php endforeach; ?>
+                            </datalist>
                         </div>
                         <div class="col-12 col-md-4">
                             <label for="uStaffType" class="form-label small fw-medium">ประเภทบุคลากร</label>
-                            <input type="text" id="uStaffType" name="staff_type" class="form-control" maxlength="100">
+                            <input type="text" id="uStaffType" name="staff_type" class="form-control"
+                                   list="staffTypeOptions" maxlength="100"
+                                   autocomplete="off" placeholder="เลือกหรือพิมพ์ประเภท">
+                            <datalist id="staffTypeOptions">
+                                <?php foreach ($staff_type_options as $opt): ?>
+                                    <option value="<?= htmlspecialchars((string)$opt, ENT_QUOTES, 'UTF-8') ?>"></option>
+                                <?php endforeach; ?>
+                            </datalist>
                         </div>
 
                         <div class="col-12 col-md-6">

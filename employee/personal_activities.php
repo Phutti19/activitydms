@@ -11,6 +11,8 @@ require_role('employee');
 
 const PA_ATTACH_MAX_BYTES = 10 * 1024 * 1024; // 10 MB ตามสเปค §7
 const PA_ATTACH_MAX_FILES = 10;
+const PA_CERT_PDF_MAX_BYTES = 10 * 1024 * 1024; // PDF ≤ 10 MB
+const PA_CERT_IMG_MAX_BYTES = 5  * 1024 * 1024; // JPG/PNG ≤ 5 MB
 
 $uid = (int) current_user_id();
 $pdo = db();
@@ -99,6 +101,120 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             flash_set('success', 'ลบไฟล์แนบสำเร็จ');
         } else {
             flash_set('error', 'ไม่พบไฟล์แนบหรือไม่มีสิทธิ์ลบ');
+        }
+        header('Location: ' . APP_URL . '/employee/personal_activities.php');
+        exit;
+    }
+
+    // ---- upload certificate ----
+    if ($action === 'upload_cert') {
+        $act_id = (int)($_POST['activity_id'] ?? 0);
+        $own = $pdo->prepare(
+            'SELECT id, title FROM activities
+             WHERE id = :id AND scope = "personal" AND created_by = :u LIMIT 1'
+        );
+        $own->execute([':id' => $act_id, ':u' => $uid]);
+        $act_row = $own->fetch();
+        if (!$act_row) {
+            flash_set('error', 'ไม่พบกิจกรรมหรือไม่มีสิทธิ์อัปโหลด');
+            header('Location: ' . APP_URL . '/employee/personal_activities.php');
+            exit;
+        }
+
+        $exists = $pdo->prepare(
+            'SELECT 1 FROM certificates WHERE activity_id = :a AND user_id = :u LIMIT 1'
+        );
+        $exists->execute([':a' => $act_id, ':u' => $uid]);
+        if ($exists->fetch()) {
+            flash_set('error', 'มีเกียรติบัตรของกิจกรรมนี้อยู่แล้ว — ลบของเดิมก่อนอัปโหลดใหม่');
+            header('Location: ' . APP_URL . '/employee/personal_activities.php');
+            exit;
+        }
+
+        $file = $_FILES['cert_file'] ?? null;
+        if (!$file) {
+            flash_set('error', 'ไม่ได้เลือกไฟล์');
+            header('Location: ' . APP_URL . '/employee/personal_activities.php');
+            exit;
+        }
+
+        $check = validate_uploaded_file($file, UPLOAD_CERT_MIMES, PA_CERT_PDF_MAX_BYTES);
+        if ($check['ok']) {
+            $per_limit = $check['ext'] === 'pdf' ? PA_CERT_PDF_MAX_BYTES : PA_CERT_IMG_MAX_BYTES;
+            if ($check['size'] > $per_limit) {
+                $max_mb = $check['ext'] === 'pdf' ? 10 : 5;
+                $check = ['ok' => false, 'error' => "ไฟล์ใหญ่เกิน {$max_mb} MB"];
+            }
+        }
+        if (!$check['ok']) {
+            flash_set('error', 'อัปโหลดเกียรติบัตรไม่สำเร็จ: ' . $check['error']);
+            header('Location: ' . APP_URL . '/employee/personal_activities.php');
+            exit;
+        }
+
+        $original_name = sanitize_download_filename((string)($file['name'] ?? ''));
+        if ($original_name === 'download') $original_name = 'certificate.' . $check['ext'];
+
+        try {
+            $filename = move_uploaded_with_uuid($file, 'certificates', $check['ext']);
+        } catch (Throwable $ex) {
+            flash_set('error', 'บันทึกไฟล์เกียรติบัตรไม่สำเร็จ');
+            header('Location: ' . APP_URL . '/employee/personal_activities.php');
+            exit;
+        }
+
+        try {
+            $ins = $pdo->prepare(
+                'INSERT INTO certificates
+                   (activity_id, user_id, filename, original_name, uploaded_by)
+                 VALUES (:a, :u, :f, :o, :by)'
+            );
+            $ins->execute([
+                ':a' => $act_id, ':u' => $uid,
+                ':f' => $filename, ':o' => $original_name, ':by' => $uid,
+            ]);
+            $cert_id = (int)$pdo->lastInsertId();
+            audit_log('upload_personal_certificate', 'certificates', $cert_id, null, [
+                'activity_id' => $act_id, 'filename' => $filename, 'original_name' => $original_name,
+            ]);
+            flash_set('success', 'อัปโหลดเกียรติบัตรของ "' . $act_row['title'] . '" สำเร็จ');
+        } catch (PDOException $e) {
+            // ลบไฟล์ที่ย้ายไปแล้ว เพื่อไม่ให้กลายเป็น orphan
+            safe_unlink_upload('certificates', $filename);
+            if ($e->getCode() === '23000') {
+                // UNIQUE(activity_id, user_id) — race condition จาก double-submit
+                flash_set('error', 'มีเกียรติบัตรของกิจกรรมนี้อยู่แล้ว — ลบของเดิมก่อนอัปโหลดใหม่');
+            } else {
+                error_log('[personal_activities.upload_cert] ' . $e->getMessage());
+                flash_set('error', 'บันทึกเกียรติบัตรไม่สำเร็จ');
+            }
+        }
+        header('Location: ' . APP_URL . '/employee/personal_activities.php');
+        exit;
+    }
+
+    // ---- delete certificate ----
+    if ($action === 'delete_cert') {
+        $cert_id = (int)($_POST['cert_id'] ?? 0);
+        $own = $pdo->prepare(
+            'SELECT c.id, c.filename, c.original_name, a.title
+             FROM certificates c
+             JOIN activities a ON a.id = c.activity_id
+             WHERE c.id = :id
+               AND c.user_id = :u1
+               AND a.scope = "personal" AND a.created_by = :u2
+             LIMIT 1'
+        );
+        $own->execute([':id' => $cert_id, ':u1' => $uid, ':u2' => $uid]);
+        $row = $own->fetch();
+        if ($row) {
+            $pdo->prepare('DELETE FROM certificates WHERE id = :id')->execute([':id' => $cert_id]);
+            if (!empty($row['filename'])) safe_unlink_upload('certificates', (string)$row['filename']);
+            audit_log('delete_personal_certificate', 'certificates', $cert_id,
+                ['filename' => $row['filename'], 'original_name' => $row['original_name']], null);
+            flash_set('success', 'ลบเกียรติบัตรสำเร็จ');
+        } else {
+            flash_set('error', 'ไม่พบเกียรติบัตรหรือไม่มีสิทธิ์ลบ');
         }
         header('Location: ' . APP_URL . '/employee/personal_activities.php');
         exit;
@@ -268,6 +384,23 @@ if (!empty($activities)) {
     }
 }
 
+// Map cert by activity_id (เฉพาะ personal ของ user คนนี้)
+$cert_map = [];
+if (!empty($activities)) {
+    $ids = array_map(fn($a) => (int)$a['id'], $activities);
+    $placeholders = implode(',', array_fill(0, count($ids), '?'));
+    $params_cert = array_merge($ids, [$uid]);
+    $cert_stmt = $pdo->prepare(
+        "SELECT id, activity_id, original_name, created_at
+         FROM certificates
+         WHERE activity_id IN ($placeholders) AND user_id = ?"
+    );
+    $cert_stmt->execute($params_cert);
+    foreach ($cert_stmt->fetchAll() as $c) {
+        $cert_map[(int)$c['activity_id']] = $c;
+    }
+}
+
 $types_stmt = $pdo->prepare(
     'SELECT id, name FROM activity_types WHERE is_active = 1 ORDER BY id'
 );
@@ -365,6 +498,46 @@ require __DIR__ . '/../includes/header.php';
                 <?= htmlspecialchars($a['location'], ENT_QUOTES, 'UTF-8') ?>
             </div>
             <?php endif; ?>
+
+            <?php
+            $cert = $cert_map[(int)$a['id']] ?? null;
+            ?>
+            <div class="border-top pt-2 mt-1">
+                <div class="small fw-medium text-muted mb-1">
+                    <i class="bi bi-award"></i> เกียรติบัตร
+                </div>
+                <?php if ($cert): ?>
+                <div class="d-flex align-items-center justify-content-between gap-2 small">
+                    <a href="<?= htmlspecialchars(APP_URL, ENT_QUOTES, 'UTF-8') ?>/api/download.php?type=cert&id=<?= (int)$cert['id'] ?>"
+                       class="text-decoration-none text-truncate" target="_blank" rel="noopener"
+                       title="<?= htmlspecialchars($cert['original_name'], ENT_QUOTES, 'UTF-8') ?>">
+                        <i class="bi bi-file-earmark-check me-1 text-warning"></i>
+                        <?= htmlspecialchars($cert['original_name'], ENT_QUOTES, 'UTF-8') ?>
+                    </a>
+                    <form method="POST" class="m-0"
+                          onsubmit="return confirm('ลบเกียรติบัตรของ &quot;<?= htmlspecialchars($a['title'], ENT_QUOTES, 'UTF-8') ?>&quot;?');">
+                        <?= csrf_field() ?>
+                        <input type="hidden" name="action" value="delete_cert">
+                        <input type="hidden" name="cert_id" value="<?= (int)$cert['id'] ?>">
+                        <button type="submit" class="btn btn-sm btn-link text-danger p-0" title="ลบเกียรติบัตร">
+                            <i class="bi bi-x-circle"></i>
+                        </button>
+                    </form>
+                </div>
+                <?php else: ?>
+                <form method="POST" enctype="multipart/form-data" class="d-flex gap-1 align-items-center">
+                    <?= csrf_field() ?>
+                    <input type="hidden" name="action" value="upload_cert">
+                    <input type="hidden" name="activity_id" value="<?= (int)$a['id'] ?>">
+                    <input type="file" name="cert_file" class="form-control form-control-sm"
+                           accept=".pdf,.jpg,.jpeg,.png" required>
+                    <button type="submit" class="btn btn-sm btn-warning flex-shrink-0" title="อัปโหลด">
+                        <i class="bi bi-upload"></i>
+                    </button>
+                </form>
+                <div class="form-text small mb-0">PDF ≤ 10MB / JPG-PNG ≤ 5MB</div>
+                <?php endif; ?>
+            </div>
 
             <?php $atts = $attach_map[(int)$a['id']] ?? []; if (!empty($atts)): ?>
             <div class="border-top pt-2 mt-1">

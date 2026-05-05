@@ -19,7 +19,7 @@ if ($q !== '') {
 
 $stmt = $pdo->prepare(
     "SELECT c.id, c.activity_id, c.original_name, c.created_at,
-            a.title AS activity_title, a.start_datetime, a.end_datetime,
+            a.title AS activity_title, a.start_datetime, a.end_datetime, a.scope,
             t.name AS type_name, t.color AS type_color
      FROM certificates c
      JOIN activities a ON a.id = c.activity_id
@@ -84,12 +84,23 @@ require __DIR__ . '/../includes/header.php';
                     <h6 class="fw-semibold mb-1 lh-sm">
                         <?= htmlspecialchars($c['activity_title'], ENT_QUOTES, 'UTF-8') ?>
                     </h6>
-                    <?php if (!empty($c['type_name'])): ?>
-                    <span class="badge"
-                          style="background:<?= htmlspecialchars($color, ENT_QUOTES, 'UTF-8') ?>;">
-                        <?= htmlspecialchars($c['type_name'], ENT_QUOTES, 'UTF-8') ?>
-                    </span>
-                    <?php endif; ?>
+                    <div class="d-flex flex-wrap gap-1">
+                        <?php if (!empty($c['type_name'])): ?>
+                        <span class="badge"
+                              style="background:<?= htmlspecialchars($color, ENT_QUOTES, 'UTF-8') ?>;">
+                            <?= htmlspecialchars($c['type_name'], ENT_QUOTES, 'UTF-8') ?>
+                        </span>
+                        <?php endif; ?>
+                        <?php if (($c['scope'] ?? '') === 'personal'): ?>
+                        <span class="badge bg-light text-dark border" title="เกียรติบัตรจากกิจกรรมส่วนตัว">
+                            <i class="bi bi-person-lock"></i> ส่วนตัว
+                        </span>
+                        <?php else: ?>
+                        <span class="badge bg-light text-dark border" title="เกียรติบัตรจากกิจกรรมขององค์กร">
+                            <i class="bi bi-building"></i> องค์กร
+                        </span>
+                        <?php endif; ?>
+                    </div>
                 </div>
             </div>
             <div class="small text-muted">

@@ -21,17 +21,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($action === 'create' || $action === 'update') {
         $name        = trim((string)($_POST['name'] ?? ''));
         $start_month = (int)($_POST['start_month'] ?? 0);
-        $start_year  = (int)($_POST['start_year']  ?? 0);
+        // UI รับเป็น พ.ศ. — แปลงเป็น ค.ศ. ก่อนเก็บ (DB column ใช้ MySQL YEAR ซึ่งรองรับเฉพาะ 1901–2155)
+        $start_year_be = (int)($_POST['start_year']  ?? 0);
         $end_month   = (int)($_POST['end_month']   ?? 0);
-        $end_year    = (int)($_POST['end_year']    ?? 0);
+        $end_year_be = (int)($_POST['end_year']    ?? 0);
+        $start_year  = $start_year_be - 543;
+        $end_year    = $end_year_be   - 543;
         $is_active   = isset($_POST['is_active']) ? 1 : 0;
 
         $errors = [];
         if ($name === '' || mb_strlen($name) > 50) $errors[] = 'กรุณากรอกชื่อปีงบประมาณ (ไม่เกิน 50 ตัว)';
         if ($start_month < 1 || $start_month > 12) $errors[] = 'เดือนเริ่มต้นไม่ถูกต้อง';
         if ($end_month   < 1 || $end_month   > 12) $errors[] = 'เดือนสิ้นสุดไม่ถูกต้อง';
-        if ($start_year  < 2000 || $start_year > 2100) $errors[] = 'ปี ค.ศ. เริ่มต้นไม่ถูกต้อง';
-        if ($end_year    < 2000 || $end_year   > 2100) $errors[] = 'ปี ค.ศ. สิ้นสุดไม่ถูกต้อง';
+        if ($start_year_be < 2543 || $start_year_be > 2643) $errors[] = 'ปี พ.ศ. เริ่มต้นไม่ถูกต้อง';
+        if ($end_year_be   < 2543 || $end_year_be   > 2643) $errors[] = 'ปี พ.ศ. สิ้นสุดไม่ถูกต้อง';
         if (empty($errors) && ($end_year * 100 + $end_month) < ($start_year * 100 + $start_month)) {
             $errors[] = 'เดือน/ปีสิ้นสุดต้องไม่ก่อนเดือน/ปีเริ่มต้น';
         }
@@ -173,10 +176,10 @@ require __DIR__ . '/../includes/header.php';
                         <td data-label="ชื่อ"><strong><?= $name_safe ?></strong></td>
                         <td data-label="ช่วงเดือน" class="small text-muted">
                             <?= htmlspecialchars($th_months[(int)$y['start_month']] ?? '', ENT_QUOTES, 'UTF-8') ?>
-                            <?= (int)$y['start_year'] ?>
+                            <?= (int)$y['start_year'] + 543 ?>
                             –
                             <?= htmlspecialchars($th_months[(int)$y['end_month']] ?? '', ENT_QUOTES, 'UTF-8') ?>
-                            <?= (int)$y['end_year'] ?>
+                            <?= (int)$y['end_year'] + 543 ?>
                         </td>
                         <td data-label="กิจกรรม">
                             <span class="badge bg-secondary"><?= $cnt ?> รายการ</span>
@@ -251,9 +254,9 @@ require __DIR__ . '/../includes/header.php';
                             </select>
                         </div>
                         <div class="col-6">
-                            <label for="fyStartYear" class="form-label small fw-medium">ปี ค.ศ. เริ่ม *</label>
+                            <label for="fyStartYear" class="form-label small fw-medium">ปี พ.ศ. เริ่ม *</label>
                             <input type="number" id="fyStartYear" name="start_year" class="form-control"
-                                   required min="2000" max="2100" value="<?= $current_year - 1 ?>">
+                                   required min="2543" max="2643" value="<?= $current_year - 1 + 543 ?>">
                         </div>
                         <div class="col-6">
                             <label for="fyEndMonth" class="form-label small fw-medium">เดือนสิ้นสุด *</label>
@@ -266,9 +269,9 @@ require __DIR__ . '/../includes/header.php';
                             </select>
                         </div>
                         <div class="col-6">
-                            <label for="fyEndYear" class="form-label small fw-medium">ปี ค.ศ. สิ้นสุด *</label>
+                            <label for="fyEndYear" class="form-label small fw-medium">ปี พ.ศ. สิ้นสุด *</label>
                             <input type="number" id="fyEndYear" name="end_year" class="form-control"
-                                   required min="2000" max="2100" value="<?= $current_year ?>">
+                                   required min="2543" max="2643" value="<?= $current_year + 543 ?>">
                         </div>
                     </div>
 
@@ -306,9 +309,9 @@ function openFyModal(data) {
     document.getElementById('fyId').value = isEdit ? data.id : '';
     document.getElementById('fyName').value = isEdit ? data.name : '';
     document.getElementById('fyStartMonth').value = isEdit ? data.start_month : 10;
-    document.getElementById('fyStartYear').value  = isEdit ? data.start_year  : (new Date().getFullYear() - 1);
+    document.getElementById('fyStartYear').value  = isEdit ? (parseInt(data.start_year) + 543) : (new Date().getFullYear() - 1 + 543);
     document.getElementById('fyEndMonth').value   = isEdit ? data.end_month   : 9;
-    document.getElementById('fyEndYear').value    = isEdit ? data.end_year    : new Date().getFullYear();
+    document.getElementById('fyEndYear').value    = isEdit ? (parseInt(data.end_year) + 543)   : (new Date().getFullYear() + 543);
     document.getElementById('fyIsActive').checked = isEdit ? (parseInt(data.is_active) === 1) : false;
 
     const warn = document.getElementById('fyEditWarn');

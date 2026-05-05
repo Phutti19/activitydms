@@ -5,7 +5,7 @@
 
 > เอกสารฉบับเต็ม: [`docs/ActivityDMS_Spec_v1_1.md`](docs/ActivityDMS_Spec_v1_1.md)
 > กติกาสำหรับ AI / Dev: [`CLAUDE.md`](CLAUDE.md)
-> Schema + seed: [`database.sql`](database.sql)
+> Schema + seed: [`database/schema.sql`](database/schema.sql)
 
 ---
 
@@ -51,7 +51,9 @@ activitydms/
 ├── templates/emails/               # HTML email templates
 ├── uploads/                        # ไฟล์อัปโหลด (ห้ามอยู่ใน document root จริง)
 ├── docs/                           # สเปคเต็ม + summary แต่ละ phase
-├── database.sql                    # schema + seed STAFF_ARIT
+├── database/                       # schema + seed (ห้าม serve ผ่าน web)
+│   ├── schema.sql                  # 14 tables + seed STAFF_ARIT
+│   └── seed_mock_data.sql
 ├── seed_mock_data.sql              # ข้อมูลทดสอบเพิ่มเติม
 └── .env.example                    # template ของ .env
 ```
@@ -78,7 +80,7 @@ composer install
 
 # 3) สร้าง database + import schema + seed
 mysql -u root -p -e "CREATE DATABASE activitydms CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
-mysql -u root -p activitydms < database.sql
+mysql -u root -p activitydms < database/schema.sql
 # (optional) ข้อมูลทดสอบ
 mysql -u root -p activitydms < seed_mock_data.sql
 
@@ -127,7 +129,7 @@ php -S localhost:8000
 3. ถ้า error ชี้ที่ `vendor/autoload.php` → ลืมรัน `composer install`
 
 ### 🔴 5.2 Login ไม่ได้ / "Invalid credentials"
-- ตรวจว่า import `database.sql` แล้ว (ตาราง `users` ควรมี 31 แถว)
+- ตรวจว่า import `database/schema.sql` แล้ว (ตาราง `users` ควรมี 31 แถว)
 - เช็ค `users.password_hash` ต้องขึ้นต้นด้วย `$2y$` (bcrypt)
 - ถ้าเปลี่ยน password seed เอง → ต้อง hash ด้วย `password_hash($pwd, PASSWORD_BCRYPT)` ห้าม md5/plain
 

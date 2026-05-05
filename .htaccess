@@ -20,9 +20,17 @@ ServerSignature Off
 </IfModule>
 
 # Deny access to sensitive file types
-<FilesMatch "\.(env|env\.example|sql|log|lock|yml|yaml|ini|sh|bat|htpasswd)$">
+<FilesMatch "\.(env|env\.example|sql|log|lock|yml|yaml|ini|sh|bat|htpasswd|md)$">
     Require all denied
 </FilesMatch>
+
+# Block legacy uploads/ path (now stored outside document root via UPLOAD_PATH)
+RedirectMatch 404 ^/uploads(/|$)
+
+# Block direct access to non-public folders
+<DirectoryMatch "^.*/(database|docs|design|cron|includes|config|templates|storage|vendor)(/|$)">
+    Require all denied
+</DirectoryMatch>
 
 # Protect hidden directories and files
 <FilesMatch "^\.">

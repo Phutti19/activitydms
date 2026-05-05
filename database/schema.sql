@@ -42,9 +42,9 @@ CREATE TABLE IF NOT EXISTS `fiscal_years` (
   `id`          SMALLINT UNSIGNED NOT NULL AUTO_INCREMENT,
   `name`        VARCHAR(50)       NOT NULL COMMENT 'ชื่อปีงบประมาณ เช่น 2568 (พ.ศ.)',
   `start_month` TINYINT UNSIGNED  NOT NULL DEFAULT 10 COMMENT 'เดือนเริ่มต้น (1-12) default=10 ตุลาคม',
-  `start_year`  YEAR              NOT NULL             COMMENT 'ปี ค.ศ. ที่เริ่มต้น',
+  `start_year`  YEAR              NOT NULL             COMMENT 'ปี ค.ศ. ที่เริ่มต้น (UI แสดงเป็น พ.ศ. — DB เก็บ ค.ศ. เพราะ MySQL YEAR รองรับ 1901–2155)',
   `end_month`   TINYINT UNSIGNED  NOT NULL DEFAULT 9  COMMENT 'เดือนสิ้นสุด (1-12) default=9 กันยายน',
-  `end_year`    YEAR              NOT NULL             COMMENT 'ปี ค.ศ. ที่สิ้นสุด',
+  `end_year`    YEAR              NOT NULL             COMMENT 'ปี ค.ศ. ที่สิ้นสุด (UI แสดงเป็น พ.ศ. — DB เก็บ ค.ศ. เพราะ MySQL YEAR รองรับ 1901–2155)',
   `is_active`   TINYINT(1)        NOT NULL DEFAULT 1   COMMENT '1=ปีงบประมาณที่ใช้งานอยู่ปัจจุบัน (ควรมีแค่ 1 record ที่ active)',
   `created_at`  TIMESTAMP         NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`)
@@ -146,13 +146,13 @@ CREATE TABLE IF NOT EXISTS `certificates` (
   `user_id`       INT UNSIGNED NOT NULL COMMENT 'FK → users.id เจ้าของเกียรติบัตร (CASCADE DELETE)',
   `filename`      VARCHAR(255) NOT NULL COMMENT 'ชื่อไฟล์ที่เก็บจริง (UUID) รองรับ PDF / JPG / PNG',
   `original_name` VARCHAR(255) NOT NULL COMMENT 'ชื่อไฟล์ต้นฉบับ ใช้ตอน download',
-  `uploaded_by`   INT UNSIGNED NOT NULL COMMENT 'FK → users.id Admin ที่อัปโหลด',
+  `uploaded_by`   INT UNSIGNED NOT NULL COMMENT 'FK → users.id ผู้อัปโหลด (Admin สำหรับ org / เจ้าของกิจกรรมเองสำหรับ personal)',
   `created_at`    TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   UNIQUE KEY `uq_cert` (`activity_id`, `user_id`) COMMENT '1 คน รับได้ 1 ใบต่อกิจกรรม',
   KEY `idx_user` (`user_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-  COMMENT='เกียรติบัตรรายบุคคล Admin อัปโหลดไฟล์ PDF/JPG/PNG — Employee เห็นและดาวน์โหลดได้เฉพาะของตัวเอง';
+  COMMENT='เกียรติบัตรรายบุคคล (PDF/JPG/PNG) — org: Admin อัปโหลดให้ participant / personal: เจ้าของกิจกรรมอัปโหลดเอง — Employee เห็น/ดาวน์โหลดได้เฉพาะของตัวเอง';
 
 CREATE TABLE IF NOT EXISTS `email_queue` (
   `id`           INT UNSIGNED NOT NULL AUTO_INCREMENT,
