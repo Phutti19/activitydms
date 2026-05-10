@@ -191,9 +191,9 @@ $app_url_safe = htmlspecialchars(APP_URL, ENT_QUOTES, 'UTF-8');
                 </div>
                 <?php endif; ?>
                 <div class="col-12 col-md-6">
-                    <div class="text-muted small">การสมัคร</div>
+                    <div class="text-muted small">การเข้าร่วม</div>
                     <?php if ((int)$activity['is_open_registration'] === 1): ?>
-                        <span class="badge bg-success">เปิดให้พนักงานสมัครเอง</span>
+                        <span class="badge bg-success">เปิดให้พนักงานเข้าร่วมเอง</span>
                     <?php else: ?>
                         <span class="badge bg-secondary">Admin เพิ่มผู้เข้าร่วมเอง</span>
                     <?php endif; ?>
@@ -206,22 +206,10 @@ $app_url_safe = htmlspecialchars(APP_URL, ENT_QUOTES, 'UTF-8');
                 <!-- Attendance summary -->
                 <div class="col-12">
                     <hr class="my-2">
-                    <div class="d-flex flex-wrap gap-3 text-center">
+                    <div class="d-flex flex-wrap gap-4 text-center">
                         <div>
                             <div class="fs-4 fw-bold text-secondary"><?= count($registrations) ?></div>
-                            <div class="small text-muted">ลงทะเบียน</div>
-                        </div>
-                        <div>
-                            <div class="fs-4 fw-bold text-success"><?= $attended_count ?></div>
-                            <div class="small text-muted">เข้าร่วม</div>
-                        </div>
-                        <div>
-                            <div class="fs-4 fw-bold text-danger"><?= $absent_count ?></div>
-                            <div class="small text-muted">ขาด</div>
-                        </div>
-                        <div>
-                            <div class="fs-4 fw-bold text-warning"><?= $registered_count ?></div>
-                            <div class="small text-muted">รอเช็ค</div>
+                            <div class="small text-muted">ผู้เข้าร่วม</div>
                         </div>
                         <div>
                             <div class="fs-4 fw-bold text-primary"><?= count($all_certs) ?></div>
@@ -312,10 +300,7 @@ $app_url_safe = htmlspecialchars(APP_URL, ENT_QUOTES, 'UTF-8');
     <!-- Tab: Attendance -->
     <div class="tab-pane fade" id="tab-attendance">
         <div class="text-muted small mb-3">
-            ทั้งหมด <?= count($registrations) ?> คน ·
-            <span class="text-success">มา <?= $attended_count ?></span> ·
-            <span class="text-danger">ขาด <?= $absent_count ?></span> ·
-            <span class="text-warning">รอเช็ค <?= $registered_count ?></span>
+            ทั้งหมด <?= count($registrations) ?> คน
         </div>
 
         <?php if (empty($registrations)): ?>
@@ -331,18 +316,10 @@ $app_url_safe = htmlspecialchars(APP_URL, ENT_QUOTES, 'UTF-8');
                         <tr>
                             <th>ชื่อ-สกุล</th>
                             <th>แผนก</th>
-                            <th class="text-center">สถานะ</th>
-                            <th>เช็คโดย</th>
                         </tr>
                     </thead>
                     <tbody>
-                        <?php foreach ($registrations as $r):
-                            $st_badge = match($r['status']) {
-                                'attended' => '<span class="badge bg-success">เข้าร่วม</span>',
-                                'absent'   => '<span class="badge bg-danger">ขาด</span>',
-                                default    => '<span class="badge bg-warning text-dark">รอเช็ค</span>',
-                            };
-                        ?>
+                        <?php foreach ($registrations as $r): ?>
                         <tr>
                             <td data-label="ชื่อ-สกุล">
                                 <div class="fw-medium">
@@ -354,15 +331,6 @@ $app_url_safe = htmlspecialchars(APP_URL, ENT_QUOTES, 'UTF-8');
                             </td>
                             <td data-label="แผนก" class="small text-muted">
                                 <?= htmlspecialchars($r['dept_name'] ?? '—', ENT_QUOTES, 'UTF-8') ?>
-                            </td>
-                            <td data-label="สถานะ" class="text-center"><?= $st_badge ?></td>
-                            <td data-label="เช็คโดย" class="small text-muted">
-                                <?php if (!empty($r['checker_name']) && $r['checked_at']): ?>
-                                    <?= htmlspecialchars($r['checker_name'], ENT_QUOTES, 'UTF-8') ?><br>
-                                    <small>
-                                        <?= htmlspecialchars(dir_view_fmt($r['checked_at']), ENT_QUOTES, 'UTF-8') ?>
-                                    </small>
-                                <?php else: ?>—<?php endif; ?>
                             </td>
                         </tr>
                         <?php endforeach; ?>
@@ -397,7 +365,7 @@ $app_url_safe = htmlspecialchars(APP_URL, ENT_QUOTES, 'UTF-8');
                             $nm_safe = htmlspecialchars($r['fullname'], ENT_QUOTES, 'UTF-8');
                             $st_badge = match($r['status']) {
                                 'attended' => '<span class="badge bg-success">เข้าร่วม</span>',
-                                'absent'   => '<span class="badge bg-danger">ขาด</span>',
+                                'absent'   => '<span class="badge bg-danger">ไม่เข้าร่วม</span>',
                                 default    => '<span class="badge bg-warning text-dark">รอเช็ค</span>',
                             };
                         ?>

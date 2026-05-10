@@ -7,7 +7,7 @@ require_role('employee');
 $uid = (int) current_user_id();
 $pdo = db();
 
-// stat: กิจกรรมที่ลงทะเบียน (org)
+// stat: กิจกรรมที่เข้าร่วม (org)
 $s1 = $pdo->prepare('SELECT COUNT(*) FROM activity_registrations WHERE user_id = :u');
 $s1->execute([':u' => $uid]);
 $reg_count = (int) $s1->fetchColumn();
@@ -148,8 +148,9 @@ $app_url_safe = htmlspecialchars(APP_URL, ENT_QUOTES, 'UTF-8');
                 <div class="fw-medium text-truncate">
                     <?= htmlspecialchars($c['activity_title'], ENT_QUOTES, 'UTF-8') ?>
                 </div>
+                <?php $_cts = strtotime((string)$c['created_at']); ?>
                 <div class="small text-muted">
-                    <?= htmlspecialchars(date('d/m/Y', strtotime((string)$c['created_at'])), ENT_QUOTES, 'UTF-8') ?>
+                    <?= htmlspecialchars(date('d/m/', $_cts) . (date('Y', $_cts) + 543), ENT_QUOTES, 'UTF-8') ?>
                 </div>
             </div>
             <a href="<?= $app_url_safe ?>/api/download.php?type=cert&id=<?= (int)$c['id'] ?>"

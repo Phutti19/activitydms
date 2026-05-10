@@ -202,7 +202,7 @@ $app_url_safe = htmlspecialchars(APP_URL, ENT_QUOTES, 'UTF-8');
     <div class="col-6 col-lg-3">
         <div class="card text-center p-3">
             <div class="fs-2 fw-bold text-secondary"><?= number_format($total_reg) ?></div>
-            <div class="small text-muted">รายการลงทะเบียน</div>
+            <div class="small text-muted">รายการเข้าร่วม</div>
         </div>
     </div>
     <div class="col-6 col-lg-3">
@@ -233,8 +233,8 @@ $app_url_safe = htmlspecialchars(APP_URL, ENT_QUOTES, 'UTF-8');
                 <tr>
                     <th>เดือน</th>
                     <th class="text-center">กิจกรรม</th>
-                    <th class="text-center">ลงทะเบียน</th>
-                    <th class="text-center">เข้าร่วม</th>
+                    <th class="text-center">ผู้เข้าร่วม</th>
+                    <th class="text-center">เข้าร่วมแล้ว</th>
                     <th class="text-center">อัตรา</th>
                 </tr>
             </thead>
@@ -272,9 +272,9 @@ $app_url_safe = htmlspecialchars(APP_URL, ENT_QUOTES, 'UTF-8');
                 <tr>
                     <th>แผนก</th>
                     <th class="text-center">สมาชิก</th>
-                    <th class="text-center">ลงทะเบียน</th>
-                    <th class="text-center">เข้าร่วม</th>
-                    <th class="text-center">ขาด</th>
+                    <th class="text-center">ผู้เข้าร่วม</th>
+                    <th class="text-center">เข้าร่วมแล้ว</th>
+                    <th class="text-center">ไม่เข้าร่วม</th>
                     <th class="text-center">อัตรา</th>
                 </tr>
             </thead>
@@ -321,9 +321,9 @@ $app_url_safe = htmlspecialchars(APP_URL, ENT_QUOTES, 'UTF-8');
                 <tr>
                     <th>กิจกรรม</th>
                     <th>วันที่</th>
-                    <th class="text-center">ลงทะเบียน</th>
-                    <th class="text-center">เข้าร่วม</th>
-                    <th class="text-center">ขาด</th>
+                    <th class="text-center">ผู้เข้าร่วม</th>
+                    <th class="text-center">เข้าร่วมแล้ว</th>
+                    <th class="text-center">ไม่เข้าร่วม</th>
                     <th class="text-center">อัตรา</th>
                 </tr>
             </thead>
@@ -356,9 +356,9 @@ $app_url_safe = htmlspecialchars(APP_URL, ENT_QUOTES, 'UTF-8');
                     <td data-label="วันที่" class="small text-muted text-nowrap">
                         <?= htmlspecialchars(dir_rpt_fmt($a['start_datetime']), ENT_QUOTES, 'UTF-8') ?>
                     </td>
-                    <td data-label="ลงทะเบียน" class="text-center"><?= (int)$a['reg_total'] ?></td>
-                    <td data-label="เข้าร่วม" class="text-center text-success fw-medium"><?= (int)$a['attended'] ?></td>
-                    <td data-label="ขาด" class="text-center text-danger"><?= (int)$a['absent'] ?></td>
+                    <td data-label="ผู้เข้าร่วม" class="text-center"><?= (int)$a['reg_total'] ?></td>
+                    <td data-label="เข้าร่วมแล้ว" class="text-center text-success fw-medium"><?= (int)$a['attended'] ?></td>
+                    <td data-label="ไม่เข้าร่วม" class="text-center text-danger"><?= (int)$a['absent'] ?></td>
                     <td data-label="อัตรา" class="text-center">
                         <?php if ($rate !== null): ?>
                         <span class="badge bg-<?= $rc ?>"><?= $rate ?>%</span>

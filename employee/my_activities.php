@@ -51,7 +51,7 @@ function emp_fmt_date(string $dt): string {
     return date('j', $ts) . ' ' . $m[(int)date('n', $ts)-1] . ' ' . (date('Y', $ts)+543) . ', ' . date('H:i', $ts);
 }
 
-$reg_label = ['registered'=>'ลงทะเบียน','attended'=>'เข้าร่วมแล้ว','absent'=>'ขาด'];
+$reg_label = ['registered'=>'ยืนยันเข้าร่วม','attended'=>'เข้าร่วมแล้ว','absent'=>'ไม่เข้าร่วม'];
 $reg_badge = ['registered'=>'secondary','attended'=>'success','absent'=>'danger'];
 
 $page_title  = 'กิจกรรมของฉัน';
@@ -75,9 +75,9 @@ require __DIR__ . '/../includes/header.php';
         <div class="col-8 col-md-4">
             <select name="reg_status" class="form-select">
                 <option value="">ทุกสถานะ</option>
-                <option value="registered" <?= $f_status==='registered'?'selected':'' ?>>ลงทะเบียน</option>
+                <option value="registered" <?= $f_status==='registered'?'selected':'' ?>>ยืนยันเข้าร่วม</option>
                 <option value="attended"   <?= $f_status==='attended'  ?'selected':'' ?>>เข้าร่วมแล้ว</option>
-                <option value="absent"     <?= $f_status==='absent'    ?'selected':'' ?>>ขาด</option>
+                <option value="absent"     <?= $f_status==='absent'    ?'selected':'' ?>>ไม่เข้าร่วม</option>
             </select>
         </div>
         <div class="col-4 col-md-2">

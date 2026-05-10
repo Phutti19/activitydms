@@ -73,7 +73,7 @@ function emprpt_fmt(string $dt): string {
     return date('j', $ts) . ' ' . $m[(int)date('n', $ts)-1] . ' ' . (date('Y', $ts)+543);
 }
 
-$reg_label = ['registered'=>'ลงทะเบียน','attended'=>'เข้าร่วมแล้ว','absent'=>'ขาด'];
+$reg_label = ['registered'=>'ยืนยันเข้าร่วม','attended'=>'เข้าร่วมแล้ว','absent'=>'ไม่เข้าร่วม'];
 $reg_badge = ['registered'=>'secondary','attended'=>'success','absent'=>'danger'];
 
 $page_title  = 'รายงานของฉัน';
@@ -104,9 +104,9 @@ $app_url_safe = htmlspecialchars(APP_URL, ENT_QUOTES, 'UTF-8');
             <label class="form-label small mb-1">สถานะ</label>
             <select name="status" class="form-select">
                 <option value="">ทั้งหมด</option>
-                <option value="registered" <?= $f_status==='registered'?'selected':'' ?>>ลงทะเบียน</option>
+                <option value="registered" <?= $f_status==='registered'?'selected':'' ?>>ยืนยันเข้าร่วม</option>
                 <option value="attended"   <?= $f_status==='attended'  ?'selected':'' ?>>เข้าร่วมแล้ว</option>
-                <option value="absent"     <?= $f_status==='absent'    ?'selected':'' ?>>ขาด</option>
+                <option value="absent"     <?= $f_status==='absent'    ?'selected':'' ?>>ไม่เข้าร่วม</option>
             </select>
         </div>
         <div class="col-6 col-md-3">
@@ -144,7 +144,7 @@ $app_url_safe = htmlspecialchars(APP_URL, ENT_QUOTES, 'UTF-8');
     <div class="col-6 col-md-3">
         <div class="card text-center p-3 h-100">
             <div class="fs-2 fw-bold text-danger"><?= $total_absent ?></div>
-            <div class="small text-muted">ขาด</div>
+            <div class="small text-muted">ไม่เข้าร่วม</div>
         </div>
     </div>
     <div class="col-6 col-md-3">

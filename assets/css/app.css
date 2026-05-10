@@ -175,6 +175,29 @@ body::-webkit-scrollbar {
     .app-main { padding: 22px 20px; }
 }
 
+/* ===== Modal fix =====
+ * บังคับ modal-fullscreen-sm-down ให้เต็มจอ + พื้นหลังทึบจริงบนมือถือ
+ * (กัน page content โผล่ทะลุที่บางจุด เช่น file input area) */
+.modal-content { background-color: #fff; }
+@media (max-width: 575.98px) {
+    .modal-fullscreen-sm-down {
+        width: 100vw;
+        max-width: none;
+        margin: 0;
+    }
+    .modal-fullscreen-sm-down .modal-content {
+        min-height: 100vh;
+        background-color: #fff;
+        border: 0;
+        border-radius: 0;
+    }
+    .modal-fullscreen-sm-down .modal-header,
+    .modal-fullscreen-sm-down .modal-body,
+    .modal-fullscreen-sm-down .modal-footer {
+        background-color: #fff;
+    }
+}
+
 /* ===== Top Navbar (mobile/tablet) ===== */
 .app-topbar {
     height: 56px;

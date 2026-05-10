@@ -24,7 +24,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit;
     }
 
-    // ตรวจว่ากิจกรรมเปิดรับจริง + scope = organization
+    // ตรวจว่ากิจกรรมเปิดให้เข้าร่วมจริง + scope = organization
     $act_check = $pdo->prepare(
         'SELECT id, title, end_datetime FROM activities
          WHERE id = :id AND scope = "organization" AND is_open_registration = 1 LIMIT 1'
@@ -33,15 +33,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $act = $act_check->fetch();
 
     if (!$act) {
-        flash_set('error', 'ไม่พบกิจกรรมหรือกิจกรรมไม่ได้เปิดรับสมัคร');
+        flash_set('error', 'ไม่พบกิจกรรมหรือกิจกรรมไม่ได้เปิดให้เข้าร่วม');
         header('Location: ' . APP_URL . '/employee/available_activities.php');
         exit;
     }
 
     if ($action === 'register') {
-        // ห้ามสมัครหลังกิจกรรมจบแล้ว
+        // ห้ามเข้าร่วมหลังกิจกรรมจบแล้ว
         if (strtotime((string)$act['end_datetime']) < time()) {
-            flash_set('error', 'กิจกรรมนี้สิ้นสุดแล้ว ไม่สามารถสมัครได้');
+            flash_set('error', 'กิจกรรมนี้สิ้นสุดแล้ว ไม่สามารถเข้าร่วมได้');
             header('Location: ' . APP_URL . '/employee/available_activities.php');
             exit;
         }
@@ -51,11 +51,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                  VALUES (:a, :u, "registered")'
             );
             $ins->execute([':a' => $activity_id, ':u' => $uid]);
-            flash_set('success', 'สมัครเข้าร่วม "' . $act['title'] . '" สำเร็จ');
+            flash_set('success', 'เข้าร่วม "' . $act['title'] . '" สำเร็จ');
         } catch (PDOException $e) {
             // UNIQUE constraint violation — already registered
             if ($e->getCode() === '23000') {
-                flash_set('error', 'คุณได้ลงทะเบียนกิจกรรมนี้ไปแล้ว');
+                flash_set('error', 'คุณได้เข้าร่วมกิจกรรมนี้แล้ว');
             } else {
                 error_log('[available_activities] ' . $e->getMessage());
                 flash_set('error', 'เกิดข้อผิดพลาด กรุณาลองใหม่');
@@ -69,9 +69,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         );
         $del->execute([':a' => $activity_id, ':u' => $uid]);
         if ($del->rowCount() > 0) {
-            flash_set('success', 'ยกเลิกการสมัคร "' . $act['title'] . '" สำเร็จ');
+            flash_set('success', 'ยกเลิกการเข้าร่วม "' . $act['title'] . '" สำเร็จ');
         } else {
-            flash_set('error', 'ไม่พบข้อมูลการสมัคร หรือไม่สามารถยกเลิกได้');
+            flash_set('error', 'ไม่พบข้อมูลการเข้าร่วม หรือไม่สามารถยกเลิกได้');
         }
     }
 
@@ -121,15 +121,15 @@ function avail_fmt_date(string $dt): string {
     return date('j', $ts) . ' ' . $m[(int)date('n', $ts)-1] . ' ' . (date('Y', $ts)+543) . ', ' . date('H:i', $ts);
 }
 
-$page_title  = 'กิจกรรมที่เปิดรับ';
+$page_title  = 'กิจกรรมที่เข้าร่วมได้';
 $page_active = 'available';
 require __DIR__ . '/../includes/header.php';
 ?>
 
 <div class="page-header">
     <div>
-        <h1 class="page-title">กิจกรรมที่เปิดรับสมัคร</h1>
-        <p class="text-muted small mb-0">กิจกรรมองค์กรที่เปิดให้สมัครเอง</p>
+        <h1 class="page-title">กิจกรรมที่เข้าร่วมได้</h1>
+        <p class="text-muted small mb-0">กิจกรรมองค์กรที่เปิดให้เข้าร่วมเอง</p>
     </div>
 </div>
 
@@ -162,7 +162,7 @@ require __DIR__ . '/../includes/header.php';
 <?php if (empty($activities)): ?>
 <div class="card p-5 text-center text-muted">
     <i class="bi bi-megaphone" style="font-size:48px;opacity:0.3;"></i>
-    <p class="mt-2 mb-0">ไม่พบกิจกรรมที่เปิดรับสมัคร</p>
+    <p class="mt-2 mb-0">ไม่พบกิจกรรมที่เข้าร่วมได้</p>
 </div>
 <?php else: ?>
 <div class="row g-3">
@@ -210,7 +210,7 @@ require __DIR__ . '/../includes/header.php';
             <?php endif; ?>
             <div class="small text-muted">
                 <i class="bi bi-people me-1"></i>
-                <?= (int)$a['reg_count'] ?> คนลงทะเบียน
+                <?= (int)$a['reg_count'] ?> คนเข้าร่วม
             </div>
             <div class="mt-auto d-flex align-items-center justify-content-between pt-1 flex-wrap gap-2">
                 <div class="d-flex gap-1 flex-wrap">
@@ -218,7 +218,7 @@ require __DIR__ . '/../includes/header.php';
                         <?= $ts_label ?>
                     </span>
                     <?php if ($is_registered): ?>
-                    <?php $rl = ['registered'=>'ลงทะเบียนแล้ว','attended'=>'เข้าร่วมแล้ว','absent'=>'ขาด'];
+                    <?php $rl = ['registered'=>'ยืนยันเข้าร่วม','attended'=>'เข้าร่วมแล้ว','absent'=>'ไม่เข้าร่วม'];
                           $rb = ['registered'=>'success','attended'=>'success','absent'=>'danger']; ?>
                     <span class="badge bg-<?= $rb[$reg_status] ?? 'secondary' ?>">
                         <?= $rl[$reg_status] ?? htmlspecialchars($reg_status, ENT_QUOTES, 'UTF-8') ?>
@@ -232,12 +232,12 @@ require __DIR__ . '/../includes/header.php';
                         <input type="hidden" name="action" value="register">
                         <input type="hidden" name="activity_id" value="<?= (int)$a['id'] ?>">
                         <button type="submit" class="btn btn-sm btn-primary">
-                            <i class="bi bi-person-plus me-1"></i>สมัคร
+                            <i class="bi bi-person-plus me-1"></i>เข้าร่วม
                         </button>
                     </form>
                     <?php elseif ($reg_status === 'registered'): ?>
                     <form method="POST" class="d-inline"
-                          onsubmit="return confirm('ยกเลิกการสมัครกิจกรรมนี้?');">
+                          onsubmit="return confirm('ยกเลิกการเข้าร่วมกิจกรรมนี้?');">
                         <?= csrf_field() ?>
                         <input type="hidden" name="action" value="unregister">
                         <input type="hidden" name="activity_id" value="<?= (int)$a['id'] ?>">

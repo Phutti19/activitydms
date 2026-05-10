@@ -34,15 +34,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $location     = trim((string)($_POST['location'] ?? ''));
     $type_id      = (int)($_POST['activity_type_id'] ?? 0);
     $fiscal_id    = (int)($_POST['fiscal_year_id'] ?? 0);
-    $start_raw    = trim((string)($_POST['start_datetime'] ?? ''));
-    $end_raw      = trim((string)($_POST['end_datetime'] ?? ''));
+    $start_date   = trim((string)($_POST['start_date']   ?? ''));
+    $start_hour   = trim((string)($_POST['start_hour']   ?? ''));
+    $start_minute = trim((string)($_POST['start_minute'] ?? ''));
+    $end_date     = trim((string)($_POST['end_date']     ?? ''));
+    $end_hour     = trim((string)($_POST['end_hour']     ?? ''));
+    $end_minute   = trim((string)($_POST['end_minute']   ?? ''));
     $external_url = trim((string)($_POST['external_url'] ?? ''));
     $is_open_reg  = isset($_POST['is_open_registration']) ? 1 : 0;
 
-    $start_db = str_replace('T', ' ', $start_raw);
-    $end_db   = str_replace('T', ' ', $end_raw);
-    if (preg_match('/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/', $start_db)) $start_db .= ':00';
-    if (preg_match('/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/', $end_db))   $end_db   .= ':00';
+    $start_db = $start_date . ' ' . $start_hour . ':' . $start_minute . ':00';
+    $end_db   = $end_date   . ' ' . $end_hour   . ':' . $end_minute   . ':00';
 
     $errors = [];
     if ($title === '' || mb_strlen($title) > 255) $errors[] = 'กรุณากรอกชื่อกิจกรรม (ไม่เกิน 255 ตัว)';
@@ -158,13 +160,28 @@ $val = function(string $key, $default = '') use ($form, $activity) {
     return $default;
 };
 
-$start_val = $val('start_datetime');
-$end_val   = $val('end_datetime');
-if ($start_val !== '' && strpos($start_val, 'T') === false) {
-    $start_val = str_replace(' ', 'T', substr($start_val, 0, 16));
-}
-if ($end_val !== '' && strpos($end_val, 'T') === false) {
-    $end_val = str_replace(' ', 'T', substr($end_val, 0, 16));
+// แยก datetime เป็น [date, hour, minute] + ปัดนาทีเป็นเลขใกล้สุดที่หาร 5 ลงตัว
+$split_dt = function ($v): array {
+    if (!$v) return ['', '', ''];
+    $ts = strtotime((string)$v);
+    if ($ts === false) return ['', '', ''];
+    $rounded = (int) round($ts / 300) * 300;
+    return [date('Y-m-d', $rounded), date('H', $rounded), date('i', $rounded)];
+};
+
+if ($form !== null) {
+    $start_date_val   = (string)($form['start_date']   ?? '');
+    $start_hour_val   = (string)($form['start_hour']   ?? '');
+    $start_minute_val = (string)($form['start_minute'] ?? '');
+    $end_date_val     = (string)($form['end_date']     ?? '');
+    $end_hour_val     = (string)($form['end_hour']     ?? '');
+    $end_minute_val   = (string)($form['end_minute']   ?? '');
+} elseif ($activity) {
+    [$start_date_val, $start_hour_val, $start_minute_val] = $split_dt($activity['start_datetime']);
+    [$end_date_val,   $end_hour_val,   $end_minute_val]   = $split_dt($activity['end_datetime']);
+} else {
+    $start_date_val = $start_hour_val = $start_minute_val = '';
+    $end_date_val   = $end_hour_val   = $end_minute_val   = '';
 }
 
 $default_fiscal = (int)$val('fiscal_year_id', 0);
@@ -240,20 +257,58 @@ require __DIR__ . '/../includes/header.php';
             </div>
 
             <div class="col-12 col-md-6">
-                <label for="aStart" class="form-label small fw-medium">
+                <label for="aStartDate" class="form-label small fw-medium">
                     เริ่มต้น <span class="text-danger">*</span>
                 </label>
-                <input type="datetime-local" id="aStart" name="start_datetime"
-                       class="form-control" required
-                       value="<?= htmlspecialchars($start_val, ENT_QUOTES, 'UTF-8') ?>">
+                <div class="row g-1">
+                    <div class="col-6">
+                        <input type="date" id="aStartDate" name="start_date" class="form-control" required
+                               value="<?= htmlspecialchars($start_date_val, ENT_QUOTES, 'UTF-8') ?>">
+                    </div>
+                    <div class="col-3">
+                        <select name="start_hour" class="form-select" required aria-label="ชั่วโมง">
+                            <option value="">ชม.</option>
+                            <?php for ($h = 0; $h < 24; $h++): $hv = sprintf('%02d', $h); ?>
+                            <option value="<?= $hv ?>" <?= $start_hour_val === $hv ? 'selected' : '' ?>><?= $hv ?></option>
+                            <?php endfor; ?>
+                        </select>
+                    </div>
+                    <div class="col-3">
+                        <select name="start_minute" class="form-select" required aria-label="นาที">
+                            <option value="">นาที</option>
+                            <?php for ($m = 0; $m < 60; $m += 5): $mv = sprintf('%02d', $m); ?>
+                            <option value="<?= $mv ?>" <?= $start_minute_val === $mv ? 'selected' : '' ?>><?= $mv ?></option>
+                            <?php endfor; ?>
+                        </select>
+                    </div>
+                </div>
             </div>
             <div class="col-12 col-md-6">
-                <label for="aEnd" class="form-label small fw-medium">
+                <label for="aEndDate" class="form-label small fw-medium">
                     สิ้นสุด <span class="text-danger">*</span>
                 </label>
-                <input type="datetime-local" id="aEnd" name="end_datetime"
-                       class="form-control" required
-                       value="<?= htmlspecialchars($end_val, ENT_QUOTES, 'UTF-8') ?>">
+                <div class="row g-1">
+                    <div class="col-6">
+                        <input type="date" id="aEndDate" name="end_date" class="form-control" required
+                               value="<?= htmlspecialchars($end_date_val, ENT_QUOTES, 'UTF-8') ?>">
+                    </div>
+                    <div class="col-3">
+                        <select name="end_hour" class="form-select" required aria-label="ชั่วโมง">
+                            <option value="">ชม.</option>
+                            <?php for ($h = 0; $h < 24; $h++): $hv = sprintf('%02d', $h); ?>
+                            <option value="<?= $hv ?>" <?= $end_hour_val === $hv ? 'selected' : '' ?>><?= $hv ?></option>
+                            <?php endfor; ?>
+                        </select>
+                    </div>
+                    <div class="col-3">
+                        <select name="end_minute" class="form-select" required aria-label="นาที">
+                            <option value="">นาที</option>
+                            <?php for ($m = 0; $m < 60; $m += 5): $mv = sprintf('%02d', $m); ?>
+                            <option value="<?= $mv ?>" <?= $end_minute_val === $mv ? 'selected' : '' ?>><?= $mv ?></option>
+                            <?php endfor; ?>
+                        </select>
+                    </div>
+                </div>
             </div>
 
             <div class="col-12">
@@ -283,7 +338,7 @@ require __DIR__ . '/../includes/header.php';
                     <input type="checkbox" id="aOpenReg" name="is_open_registration" value="1"
                            class="form-check-input" <?= $is_open_default === 1 ? 'checked' : '' ?>>
                     <label for="aOpenReg" class="form-check-label small">
-                        เปิดให้พนักงานสมัครเข้าร่วมเอง
+                        เปิดให้พนักงานเข้าร่วมเอง
                     </label>
                     <div class="form-text small">
                         <i class="bi bi-info-circle"></i>

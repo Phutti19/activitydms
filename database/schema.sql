@@ -68,7 +68,7 @@ CREATE TABLE IF NOT EXISTS `activities` (
   `activity_type_id`     TINYINT UNSIGNED NOT NULL             COMMENT 'FK → activity_types.id (ประชุม/อบรม/สัมมนา/อื่นๆ)',
   `fiscal_year_id`       SMALLINT UNSIGNED NOT NULL            COMMENT 'FK → fiscal_years.id ปีงบประมาณที่กิจกรรมนี้สังกัด',
   `scope`                ENUM('organization','personal') NOT NULL DEFAULT 'organization' COMMENT 'organization=Admin สร้าง เห็นทั้งองค์กร | personal=Employee สร้างให้ตัวเอง ไม่มีใครเห็น',
-  `is_open_registration` TINYINT(1)       NOT NULL DEFAULT 0   COMMENT '1=เปิดให้พนักงานสมัครเข้าร่วมเองได้',
+  `is_open_registration` TINYINT(1)       NOT NULL DEFAULT 0   COMMENT '1=เปิดให้พนักงานเข้าร่วมเองได้',
   `start_datetime`       DATETIME         NOT NULL             COMMENT 'วันเวลาเริ่มกิจกรรม',
   `end_datetime`         DATETIME         NOT NULL             COMMENT 'วันเวลาสิ้นสุดกิจกรรม',
   `external_url`         VARCHAR(500)              DEFAULT NULL COMMENT 'ลิงก์ภายนอก เช่น Google Meet / เว็บไซต์งาน',
@@ -113,16 +113,16 @@ CREATE TABLE IF NOT EXISTS `activity_registrations` (
   `id`              INT UNSIGNED NOT NULL AUTO_INCREMENT,
   `activity_id`     INT UNSIGNED NOT NULL             COMMENT 'FK → activities.id (CASCADE DELETE)',
   `user_id`         INT UNSIGNED NOT NULL             COMMENT 'FK → users.id ผู้เข้าร่วม (CASCADE DELETE)',
-  `status`          ENUM('registered','attended','absent') NOT NULL DEFAULT 'registered' COMMENT 'registered=สมัครแล้วรอเช็คชื่อ | attended=เข้าร่วม | absent=ขาด',
-  `registered_at`   TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT 'วันเวลาที่สมัคร/ถูกเพิ่ม',
+  `status`          ENUM('registered','attended','absent') NOT NULL DEFAULT 'registered' COMMENT 'registered=ยืนยันเข้าร่วม รอเช็คชื่อ | attended=เข้าร่วมแล้ว | absent=ไม่เข้าร่วม',
+  `registered_at`   TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT 'วันเวลาที่เข้าร่วม/ถูกเพิ่ม',
   `checked_by`      INT UNSIGNED          DEFAULT NULL COMMENT 'FK → users.id Admin ที่เช็คชื่อ (NULL=ยังไม่เช็ค)',
   `checked_at`      DATETIME              DEFAULT NULL COMMENT 'วันเวลาที่เช็คชื่อ',
   PRIMARY KEY (`id`),
-  UNIQUE KEY `uq_activity_user` (`activity_id`, `user_id`) COMMENT '1 คน สมัครได้ 1 ครั้งต่อกิจกรรม',
+  UNIQUE KEY `uq_activity_user` (`activity_id`, `user_id`) COMMENT '1 คน เข้าร่วมได้ 1 ครั้งต่อกิจกรรม',
   KEY `idx_user`    (`user_id`),
   KEY `idx_status`  (`status`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-  COMMENT='การเข้าร่วมกิจกรรม ทั้งที่ Admin เพิ่มเองและพนักงานสมัครเอง — Admin เช็คชื่อเปลี่ยน status ได้';
+  COMMENT='การเข้าร่วมกิจกรรม ทั้งที่ Admin เพิ่มเองและพนักงานเข้าร่วมเอง — Admin เช็คชื่อเปลี่ยน status ได้';
 
 CREATE TABLE IF NOT EXISTS `documents` (
   `id`            INT UNSIGNED NOT NULL AUTO_INCREMENT,

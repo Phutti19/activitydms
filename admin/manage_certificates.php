@@ -267,9 +267,10 @@ require __DIR__ . '/../includes/header.php';
                     <td data-label="อัปโหลดโดย" class="small">
                         <?= htmlspecialchars($cert['uploader_name'], ENT_QUOTES, 'UTF-8') ?>
                     </td>
+                    <?php $cts = strtotime((string)$cert['created_at']); ?>
                     <td data-label="วันที่" class="small text-muted">
                         <?= htmlspecialchars(
-                            date('d/m/Y H:i', strtotime((string)$cert['created_at'])),
+                            date('d/m/', $cts) . (date('Y', $cts) + 543) . ' ' . date('H:i', $cts),
                             ENT_QUOTES, 'UTF-8'
                         ) ?>
                     </td>

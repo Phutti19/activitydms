@@ -156,7 +156,7 @@ foreach ($emails as $email) {
              VALUES (:q, "failed", :e)'
         )->execute([':q' => $qid, ':e' => mb_substr($error_msg, 0, 1000)]);
 
-        $log("FAIL  #{$qid} → {$email['to_email']} (retry {$new_retry}/{MAIL_MAX_RETRY}): {$error_msg}");
+        $log("FAIL  #{$qid} → {$email['to_email']} (retry {$new_retry}/" . MAIL_MAX_RETRY . "): {$error_msg}");
         $failed++;
     }
 }

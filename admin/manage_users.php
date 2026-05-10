@@ -8,17 +8,11 @@ require_once __DIR__ . '/../includes/audit.php';
 
 require_role('admin');
 
-// Random password 12 chars (letters + digits, ตัด char ที่สับสน 0/O/1/l/I)
-function generate_random_password(int $length = 12): string {
-    $alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';
-    $max = strlen($alphabet) - 1;
-    do {
-        $password = '';
-        for ($i = 0; $i < $length; $i++) {
-            $password .= $alphabet[random_int(0, $max)];
-        }
-    } while (!preg_match('/[A-Za-z]/', $password) || !preg_match('/[0-9]/', $password));
-    return $password;
+// Default/temp password format: <username>@<4-digit random>
+// ใช้กับครั้งแรก (create) และตอน reset — must_change_password=1 บังคับเปลี่ยนทันทีหลัง login
+function generate_default_password(string $username): string {
+    $digits = str_pad((string)random_int(0, 9999), 4, '0', STR_PAD_LEFT);
+    return $username . '@' . $digits;
 }
 
 $valid_roles = ['admin', 'director', 'employee'];
@@ -32,16 +26,18 @@ foreach ($departments as $d) $dept_map[(int)$d['id']] = $d['name'];
 
 // Distinct values สำหรับ datalist autocomplete (ตำแหน่ง / ประเภทบุคลากร)
 // — admin ยังพิมพ์ค่าใหม่เองได้ ค่าใหม่จะปรากฏใน list ครั้งถัดไปอัตโนมัติ
-$pos_stmt = db()->query(
+$pos_stmt = db()->prepare(
     "SELECT DISTINCT position_name FROM users
      WHERE position_name <> '' ORDER BY position_name"
 );
+$pos_stmt->execute();
 $position_options = $pos_stmt->fetchAll(PDO::FETCH_COLUMN);
 
-$st_stmt = db()->query(
+$st_stmt = db()->prepare(
     "SELECT DISTINCT staff_type FROM users
      WHERE staff_type <> '' ORDER BY staff_type"
 );
+$st_stmt->execute();
 $staff_type_options = $st_stmt->fetchAll(PDO::FETCH_COLUMN);
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -105,7 +101,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $pdo->beginTransaction();
         try {
             if ($action === 'create') {
-                $initial_pwd = generate_random_password();
+                $initial_pwd = generate_default_password($username);
                 $hash = password_hash($initial_pwd, PASSWORD_BCRYPT);
                 $stmt = $pdo->prepare(
                     'INSERT INTO users
@@ -209,7 +205,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $old->execute([':id'=>$id]);
         $old_row = $old->fetch();
         if ($old_row) {
-            $new_pwd = generate_random_password();
+            $new_pwd = generate_default_password($old_row['username']);
             $hash = password_hash($new_pwd, PASSWORD_BCRYPT);
             $pdo->prepare('UPDATE users SET password_hash=:h, must_change_password=1 WHERE id=:id')
                 ->execute([':h'=>$hash, ':id'=>$id]);

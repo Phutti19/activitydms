@@ -23,7 +23,7 @@ $ta = $pdo->prepare(
 $ta->execute($fy_params);
 $total_activities = (int)$ta->fetchColumn();
 
-// ลงทะเบียน / เข้าร่วม
+// เข้าร่วม
 $reg = $pdo->prepare(
     'SELECT COUNT(*) AS reg_total,
             SUM(r.status = "attended") AS attended
@@ -247,7 +247,7 @@ $app_url_safe = htmlspecialchars(APP_URL, ENT_QUOTES, 'UTF-8');
             <div class="d-flex align-items-center justify-content-between gap-2">
                 <div>
                     <div class="dash-stat-num"><?= number_format($total_reg) ?></div>
-                    <div class="dash-stat-label">รายการลงทะเบียน</div>
+                    <div class="dash-stat-label">รายการเข้าร่วม</div>
                 </div>
                 <span class="icon-wrap"><i class="bi bi-people"></i></span>
             </div>
@@ -376,7 +376,7 @@ $app_url_safe = htmlspecialchars(APP_URL, ENT_QUOTES, 'UTF-8');
                             <?php endif; ?>
                             <?php if ((int)$a['is_open_registration'] === 1): ?>
                             <div class="small mt-1">
-                                <span class="badge bg-info">เปิดรับสมัคร</span>
+                                <span class="badge bg-info">เปิดให้เข้าร่วม</span>
                             </div>
                             <?php endif; ?>
                         </div>

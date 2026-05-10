@@ -115,8 +115,9 @@ require __DIR__ . '/../includes/header.php';
             </div>
             <div class="small text-muted">
                 <i class="bi bi-clock-history me-1"></i>
+                <?php $cts = strtotime((string)$c['created_at']); ?>
                 ออกเมื่อ <?= htmlspecialchars(
-                    date('d/m/Y', strtotime((string)$c['created_at'])),
+                    date('d/m/', $cts) . (date('Y', $cts) + 543),
                     ENT_QUOTES, 'UTF-8'
                 ) ?>
             </div>

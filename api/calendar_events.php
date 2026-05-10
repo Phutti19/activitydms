@@ -126,7 +126,7 @@ if ($role === 'employee') {
         ];
     }
 
-    // Open-registration org activities (กิจกรรมที่ admin เปิดให้สมัคร แต่ employee ยังไม่ได้ลงทะเบียน)
+    // Open-registration org activities (กิจกรรมที่ admin เปิดให้เข้าร่วม แต่ employee ยังไม่ได้ยืนยัน)
     $where_open  = ['a.scope = "organization"', 'a.is_open_registration = 1'];
     $params_open = [];
     if ($start !== null) { $where_open[] = 'a.end_datetime >= :so';   $params_open[':so'] = $start . ' 00:00:00'; }
@@ -143,7 +143,7 @@ if ($role === 'employee') {
     $stmt_open->execute($params_open);
 
     foreach ($stmt_open->fetchAll() as $a) {
-        if (isset($registered_ids[(int)$a['id']])) continue; // ลงทะเบียนแล้ว ข้าม
+        if (isset($registered_ids[(int)$a['id']])) continue; // ยืนยันเข้าร่วมแล้ว ข้าม
         $events[] = [
             'id'            => 'open_' . $a['id'],
             'title'         => '📢 ' . $a['title'],

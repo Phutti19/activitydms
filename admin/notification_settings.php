@@ -170,15 +170,17 @@ require __DIR__ . '/../includes/header.php';
                         <span class="badge bg-<?= $status_badge ?>"><?= $status_label ?></span>
                     </td>
                     <td data-label="retry" class="small text-center"><?= (int)$q['retry_count'] ?>/3</td>
+                    <?php $cts = strtotime((string)$q['created_at']); ?>
                     <td data-label="วันที่สร้าง" class="small text-muted text-nowrap">
                         <?= htmlspecialchars(
-                            date('d/m/Y H:i', strtotime((string)$q['created_at'])),
+                            date('d/m/', $cts) . (date('Y', $cts) + 543) . ' ' . date('H:i', $cts),
                             ENT_QUOTES, 'UTF-8'
                         ) ?>
                     </td>
                     <td data-label="ส่งเมื่อ" class="small text-muted text-nowrap">
+                        <?php $sts = $q['sent_at'] ? strtotime((string)$q['sent_at']) : 0; ?>
                         <?= $q['sent_at']
-                            ? htmlspecialchars(date('d/m/Y H:i', strtotime((string)$q['sent_at'])), ENT_QUOTES, 'UTF-8')
+                            ? htmlspecialchars(date('d/m/', $sts) . (date('Y', $sts) + 543) . ' ' . date('H:i', $sts), ENT_QUOTES, 'UTF-8')
                             : '—' ?>
                     </td>
                 </tr>

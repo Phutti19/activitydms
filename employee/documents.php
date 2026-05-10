@@ -112,9 +112,10 @@ $app_url_safe = htmlspecialchars(APP_URL, ENT_QUOTES, 'UTF-8');
                         </div>
                     </td>
                     <td data-label="ขนาด" class="small text-muted"><?= $kb ?> KB</td>
+                    <?php $dts = strtotime((string)$doc['created_at']); ?>
                     <td data-label="วันที่" class="small text-muted">
                         <?= htmlspecialchars(
-                            date('d/m/Y', strtotime((string)$doc['created_at'])),
+                            date('d/m/', $dts) . (date('Y', $dts) + 543),
                             ENT_QUOTES, 'UTF-8'
                         ) ?>
                     </td>

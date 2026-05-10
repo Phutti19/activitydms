@@ -174,9 +174,10 @@ require __DIR__ . '/../includes/header.php';
                     <td data-label="อัปโหลดโดย" class="small">
                         <?= htmlspecialchars($doc['uploader_name'], ENT_QUOTES, 'UTF-8') ?>
                     </td>
+                    <?php $dts = strtotime((string)$doc['created_at']); ?>
                     <td data-label="วันที่" class="small text-muted">
                         <?= htmlspecialchars(
-                            date('d/m/Y H:i', strtotime((string)$doc['created_at'])),
+                            date('d/m/', $dts) . (date('Y', $dts) + 543) . ' ' . date('H:i', $dts),
                             ENT_QUOTES, 'UTF-8'
                         ) ?>
                     </td>

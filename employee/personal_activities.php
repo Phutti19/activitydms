@@ -17,10 +17,33 @@ const PA_CERT_IMG_MAX_BYTES = 5  * 1024 * 1024; // JPG/PNG ≤ 5 MB
 $uid = (int) current_user_id();
 $pdo = db();
 
+// แยก datetime เป็น [date, hour, minute] + ปัดนาทีเป็นเลขใกล้สุดที่หาร 5 ลงตัว
+function pa_split_dt($v): array {
+    if (!$v) return ['', '', ''];
+    $ts = strtotime((string)$v);
+    if ($ts === false) return ['', '', ''];
+    $rounded = (int) round($ts / 300) * 300;
+    return [date('Y-m-d', $rounded), date('H', $rounded), date('i', $rounded)];
+}
+
 // ---------------------------------------------------------------------------
 // POST handlers
 // ---------------------------------------------------------------------------
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    // ตรวจ post_max_size: ถ้าเกินเพดาน PHP, $_POST/$_FILES จะว่าง CSRF จะ fail เงียบ ๆ
+    if (
+        empty($_POST) && empty($_FILES)
+        && (int)($_SERVER['CONTENT_LENGTH'] ?? 0) > 0
+    ) {
+        $limit = ini_get('post_max_size');
+        flash_set('error',
+            'ไฟล์/ข้อมูลที่ส่งใหญ่เกินเพดานเซิร์ฟเวอร์ (post_max_size = '
+            . $limit . ') — รัน dev server ด้วย "php -c php-dev.ini -S localhost:8000"'
+        );
+        header('Location: ' . APP_URL . '/employee/personal_activities.php');
+        exit;
+    }
+
     verify_csrf_or_die();
     $action = $_POST['action'] ?? '';
 
@@ -79,6 +102,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         if ($uploaded > 0) flash_set('success', 'อัปโหลดไฟล์แนบ ' . $uploaded . ' ไฟล์');
     };
+
+    // ---- upload attachment(s) inline (จากการ์ดในหน้า list) ----
+    if ($action === 'upload_attachment') {
+        $act_id = (int)($_POST['activity_id'] ?? 0);
+        $own = $pdo->prepare(
+            'SELECT id, title FROM activities
+             WHERE id = :id AND scope = "personal" AND created_by = :u LIMIT 1'
+        );
+        $own->execute([':id' => $act_id, ':u' => $uid]);
+        $act_row = $own->fetch();
+        if (!$act_row) {
+            flash_set('error', 'ไม่พบกิจกรรมหรือไม่มีสิทธิ์แนบไฟล์');
+            header('Location: ' . APP_URL . '/employee/personal_activities.php');
+            exit;
+        }
+        $process_attachments($act_id);
+        header('Location: ' . APP_URL . '/employee/personal_activities.php');
+        exit;
+    }
 
     // ---- delete attachment ----
     if ($action === 'delete_attachment') {
@@ -230,10 +272,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $location    = trim((string)($_POST['location'] ?? ''));
         $type_id     = (int)($_POST['activity_type_id'] ?? 0);
         $fiscal_id   = (int)($_POST['fiscal_year_id'] ?? 0);
-        $start_raw   = str_replace('T', ' ', trim((string)($_POST['start_datetime'] ?? '')));
-        $end_raw     = str_replace('T', ' ', trim((string)($_POST['end_datetime'] ?? '')));
-        if (preg_match('/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/', $start_raw)) $start_raw .= ':00';
-        if (preg_match('/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/', $end_raw))   $end_raw   .= ':00';
+        $start_date   = trim((string)($_POST['start_date']   ?? ''));
+        $start_hour   = trim((string)($_POST['start_hour']   ?? ''));
+        $start_minute = trim((string)($_POST['start_minute'] ?? ''));
+        $end_date     = trim((string)($_POST['end_date']     ?? ''));
+        $end_hour     = trim((string)($_POST['end_hour']     ?? ''));
+        $end_minute   = trim((string)($_POST['end_minute']   ?? ''));
+        $start_raw = $start_date . ' ' . $start_hour . ':' . $start_minute . ':00';
+        $end_raw   = $end_date   . ' ' . $end_hour   . ':' . $end_minute   . ':00';
 
         $errors = [];
         if ($title === '' || mb_strlen($title) > 255) $errors[] = 'กรุณากรอกชื่อกิจกรรม (ไม่เกิน 255 ตัวอักษร)';
@@ -539,12 +585,17 @@ require __DIR__ . '/../includes/header.php';
                 <?php endif; ?>
             </div>
 
-            <?php $atts = $attach_map[(int)$a['id']] ?? []; if (!empty($atts)): ?>
+            <?php
+            $atts = $attach_map[(int)$a['id']] ?? [];
+            $att_count = count($atts);
+            $att_remaining = PA_ATTACH_MAX_FILES - $att_count;
+            ?>
             <div class="border-top pt-2 mt-1">
                 <div class="small fw-medium text-muted mb-1">
-                    <i class="bi bi-paperclip"></i> ไฟล์แนบ (<?= count($atts) ?>)
+                    <i class="bi bi-paperclip"></i> ไฟล์แนบ (<?= $att_count ?>/<?= PA_ATTACH_MAX_FILES ?>)
                 </div>
-                <ul class="list-unstyled mb-0 small d-flex flex-column gap-1">
+                <?php if ($att_count > 0): ?>
+                <ul class="list-unstyled mb-2 small d-flex flex-column gap-1">
                 <?php foreach ($atts as $att):
                     $att_label = trim((string)$att['label']) !== '' ? $att['label'] : 'ไฟล์แนบ';
                     $att_label_safe = htmlspecialchars($att_label, ENT_QUOTES, 'UTF-8');
@@ -567,8 +618,27 @@ require __DIR__ . '/../includes/header.php';
                     </li>
                 <?php endforeach; ?>
                 </ul>
+                <?php endif; ?>
+
+                <?php if ($att_remaining > 0): ?>
+                <form method="POST" enctype="multipart/form-data"
+                      class="d-flex gap-1 align-items-center attach-add-form">
+                    <?= csrf_field() ?>
+                    <input type="hidden" name="action" value="upload_attachment">
+                    <input type="hidden" name="activity_id" value="<?= (int)$a['id'] ?>">
+                    <input type="file" name="attachments[]" class="form-control form-control-sm attach-add-input"
+                           multiple
+                           accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.jpg,.jpeg,.png,.webp"
+                           required>
+                    <button type="submit" class="btn btn-sm btn-outline-primary flex-shrink-0" title="เพิ่มไฟล์แนบ">
+                        <i class="bi bi-plus-lg"></i>
+                    </button>
+                </form>
+                <div class="form-text small mb-0">
+                    เพิ่มได้อีก <?= $att_remaining ?> ไฟล์ — สูงสุด 10 MB ต่อไฟล์
+                </div>
+                <?php endif; ?>
             </div>
-            <?php endif; ?>
 
             <div class="mt-auto d-flex align-items-center justify-content-between pt-1">
                 <span class="badge"
@@ -584,8 +654,16 @@ require __DIR__ . '/../includes/header.php';
                             data-location="<?= htmlspecialchars($a['location'] ?? '', ENT_QUOTES, 'UTF-8') ?>"
                             data-type="<?= (int)$a['activity_type_id'] ?>"
                             data-fiscal="<?= (int)$a['fiscal_year_id'] ?>"
-                            data-start="<?= htmlspecialchars(date('Y-m-d\TH:i', strtotime((string)$a['start_datetime'])), ENT_QUOTES, 'UTF-8') ?>"
-                            data-end="<?= htmlspecialchars(date('Y-m-d\TH:i', strtotime((string)$a['end_datetime'])), ENT_QUOTES, 'UTF-8') ?>"
+                            <?php
+                            [$pa_sd, $pa_sh, $pa_sm] = pa_split_dt((string)$a['start_datetime']);
+                            [$pa_ed, $pa_eh, $pa_em] = pa_split_dt((string)$a['end_datetime']);
+                            ?>
+                            data-start-date="<?= htmlspecialchars($pa_sd, ENT_QUOTES, 'UTF-8') ?>"
+                            data-start-hour="<?= htmlspecialchars($pa_sh, ENT_QUOTES, 'UTF-8') ?>"
+                            data-start-minute="<?= htmlspecialchars($pa_sm, ENT_QUOTES, 'UTF-8') ?>"
+                            data-end-date="<?= htmlspecialchars($pa_ed, ENT_QUOTES, 'UTF-8') ?>"
+                            data-end-hour="<?= htmlspecialchars($pa_eh, ENT_QUOTES, 'UTF-8') ?>"
+                            data-end-minute="<?= htmlspecialchars($pa_em, ENT_QUOTES, 'UTF-8') ?>"
                             title="แก้ไข">
                         <i class="bi bi-pencil"></i>
                     </button>
@@ -647,12 +725,52 @@ require __DIR__ . '/../includes/header.php';
                         </select>
                     </div>
                     <div class="col-12 col-md-6">
-                        <label for="fStart" class="form-label fw-medium">วันเวลาเริ่ม <span class="text-danger">*</span></label>
-                        <input type="datetime-local" id="fStart" name="start_datetime" class="form-control" required>
+                        <label for="fStartDate" class="form-label fw-medium">วันเวลาเริ่ม <span class="text-danger">*</span></label>
+                        <div class="row g-1">
+                            <div class="col-6">
+                                <input type="date" id="fStartDate" name="start_date" class="form-control" required>
+                            </div>
+                            <div class="col-3">
+                                <select id="fStartHour" name="start_hour" class="form-select" required aria-label="ชั่วโมง">
+                                    <option value="">ชม.</option>
+                                    <?php for ($h = 0; $h < 24; $h++): $hv = sprintf('%02d', $h); ?>
+                                    <option value="<?= $hv ?>"><?= $hv ?></option>
+                                    <?php endfor; ?>
+                                </select>
+                            </div>
+                            <div class="col-3">
+                                <select id="fStartMinute" name="start_minute" class="form-select" required aria-label="นาที">
+                                    <option value="">นาที</option>
+                                    <?php for ($m = 0; $m < 60; $m += 5): $mv = sprintf('%02d', $m); ?>
+                                    <option value="<?= $mv ?>"><?= $mv ?></option>
+                                    <?php endfor; ?>
+                                </select>
+                            </div>
+                        </div>
                     </div>
                     <div class="col-12 col-md-6">
-                        <label for="fEnd" class="form-label fw-medium">วันเวลาสิ้นสุด <span class="text-danger">*</span></label>
-                        <input type="datetime-local" id="fEnd" name="end_datetime" class="form-control" required>
+                        <label for="fEndDate" class="form-label fw-medium">วันเวลาสิ้นสุด <span class="text-danger">*</span></label>
+                        <div class="row g-1">
+                            <div class="col-6">
+                                <input type="date" id="fEndDate" name="end_date" class="form-control" required>
+                            </div>
+                            <div class="col-3">
+                                <select id="fEndHour" name="end_hour" class="form-select" required aria-label="ชั่วโมง">
+                                    <option value="">ชม.</option>
+                                    <?php for ($h = 0; $h < 24; $h++): $hv = sprintf('%02d', $h); ?>
+                                    <option value="<?= $hv ?>"><?= $hv ?></option>
+                                    <?php endfor; ?>
+                                </select>
+                            </div>
+                            <div class="col-3">
+                                <select id="fEndMinute" name="end_minute" class="form-select" required aria-label="นาที">
+                                    <option value="">นาที</option>
+                                    <?php for ($m = 0; $m < 60; $m += 5): $mv = sprintf('%02d', $m); ?>
+                                    <option value="<?= $mv ?>"><?= $mv ?></option>
+                                    <?php endfor; ?>
+                                </select>
+                            </div>
+                        </div>
                     </div>
                     <div class="col-12">
                         <label for="fLocation" class="form-label fw-medium">สถานที่</label>
@@ -664,13 +782,18 @@ require __DIR__ . '/../includes/header.php';
                     </div>
                     <div class="col-12">
                         <label for="fAttach" class="form-label fw-medium">
-                            <i class="bi bi-paperclip"></i> ไฟล์แนบ (เพิ่มเติม)
+                            <i class="bi bi-paperclip"></i> <span id="fAttachLabel">ไฟล์แนบ</span>
                         </label>
                         <input type="file" id="fAttach" name="attachments[]" class="form-control"
                                multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.jpg,.jpeg,.png,.webp">
                         <div class="form-text small">
                             PDF / Word / Excel / PowerPoint / รูปภาพ — สูงสุด 10 MB ต่อไฟล์,
                             <?= PA_ATTACH_MAX_FILES ?> ไฟล์ต่อกิจกรรม
+                        </div>
+                        <div class="form-text small text-warning d-none" id="fAttachServerHint">
+                            <i class="bi bi-exclamation-triangle"></i>
+                            เซิร์ฟเวอร์ปัจจุบันยอมรับไฟล์สูงสุด <span id="fAttachServerLimit"></span> ต่อไฟล์
+                            — ถ้าเกินจะอัปโหลดไม่สำเร็จ
                         </div>
                     </div>
                 </div>
@@ -688,6 +811,7 @@ require __DIR__ . '/../includes/header.php';
 <script>
 // ใช้ event delegation + show.bs.modal เพื่อให้ Bootstrap เป็นคนเปิด modal เอง (กัน race + ทำงานได้แม้ปุ่มถูก render ใหม่)
 const activityModalEl = document.getElementById('activityModal');
+const fAttachLabel    = document.getElementById('fAttachLabel');
 
 document.addEventListener('click', (ev) => {
     const btn = ev.target.closest('.edit-btn');
@@ -699,15 +823,72 @@ document.addEventListener('click', (ev) => {
     document.getElementById('fLocation').value    = d.location || '';
     document.getElementById('fType').value        = d.type || '';
     document.getElementById('fFiscal').value      = d.fiscal || '';
-    document.getElementById('fStart').value       = d.start || '';
-    document.getElementById('fEnd').value         = d.end || '';
+    document.getElementById('fStartDate').value   = d.startDate   || '';
+    document.getElementById('fStartHour').value   = d.startHour   || '';
+    document.getElementById('fStartMinute').value = d.startMinute || '';
+    document.getElementById('fEndDate').value     = d.endDate     || '';
+    document.getElementById('fEndHour').value     = d.endHour     || '';
+    document.getElementById('fEndMinute').value   = d.endMinute   || '';
     document.getElementById('modalTitle').textContent = 'แก้ไขกิจกรรมส่วนตัว';
+    fAttachLabel.textContent = 'ไฟล์แนบ (เพิ่มไฟล์ใหม่)';
+});
+
+document.querySelectorAll('[data-mode="create"]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+        fAttachLabel.textContent = 'ไฟล์แนบ';
+    });
+});
+
+// แก้ Bootstrap 5 a11y: ย้าย focus ออกจาก modal ก่อนตั้ง aria-hidden
+activityModalEl.addEventListener('hide.bs.modal', () => {
+    if (activityModalEl.contains(document.activeElement)) {
+        document.activeElement.blur();
+    }
 });
 
 activityModalEl.addEventListener('hidden.bs.modal', () => {
     document.getElementById('modalEditId').value = '0';
     activityModalEl.querySelector('form').reset();
     document.getElementById('modalTitle').textContent = 'สร้างกิจกรรมส่วนตัว';
+    fAttachLabel.textContent = 'ไฟล์แนบ';
+});
+
+// Client-side preflight: เตือนถ้าไฟล์เกินเพดาน server (อ่านจาก data-server-limit)
+const fAttach        = document.getElementById('fAttach');
+const fAttachHint    = document.getElementById('fAttachServerHint');
+const fAttachLimitEl = document.getElementById('fAttachServerLimit');
+const SERVER_UPLOAD_LIMIT_BYTES = <?= (int) (
+    (function (): int {
+        $v = ini_get('upload_max_filesize');
+        if (!$v) return 0;
+        $unit = strtolower(substr($v, -1));
+        $num  = (int) $v;
+        return match ($unit) {
+            'g' => $num * 1024 * 1024 * 1024,
+            'm' => $num * 1024 * 1024,
+            'k' => $num * 1024,
+            default => $num,
+        };
+    })()
+) ?>;
+const SERVER_UPLOAD_LIMIT_LABEL = '<?= htmlspecialchars((string) ini_get('upload_max_filesize'), ENT_QUOTES, 'UTF-8') ?>';
+if (SERVER_UPLOAD_LIMIT_BYTES > 0 && SERVER_UPLOAD_LIMIT_BYTES < (10 * 1024 * 1024)) {
+    fAttachLimitEl.textContent = SERVER_UPLOAD_LIMIT_LABEL;
+    fAttachHint.classList.remove('d-none');
+}
+function checkOversize(input) {
+    if (!input.files || !input.files.length) return;
+    if (SERVER_UPLOAD_LIMIT_BYTES <= 0) return;
+    const tooBig = Array.from(input.files).filter(f => f.size > SERVER_UPLOAD_LIMIT_BYTES);
+    if (tooBig.length) {
+        alert('ไฟล์ต่อไปนี้ใหญ่เกินเพดานเซิร์ฟเวอร์ (' + SERVER_UPLOAD_LIMIT_LABEL + '):\n\n'
+              + tooBig.map(f => '• ' + f.name + ' (' + (f.size/1024/1024).toFixed(1) + ' MB)').join('\n'));
+        input.value = '';
+    }
+}
+fAttach.addEventListener('change', () => checkOversize(fAttach));
+document.querySelectorAll('.attach-add-input').forEach((el) => {
+    el.addEventListener('change', () => checkOversize(el));
 });
 </script>
 

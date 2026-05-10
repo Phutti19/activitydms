@@ -23,9 +23,9 @@ $app_url_safe = htmlspecialchars(APP_URL, ENT_QUOTES, 'UTF-8');
 <div class="card p-3 mb-3">
     <div class="d-flex gap-3 flex-wrap align-items-center small">
         <span class="fw-medium">สัญลักษณ์:</span>
-        <span><span class="badge bg-primary me-1">&nbsp;</span>กิจกรรมองค์กร (ลงทะเบียน)</span>
-        <span><span class="badge me-1" style="background:#F59E0B;">&nbsp;</span>📢 เปิดรับสมัคร</span>
-        <span><span class="badge bg-secondary me-1">&nbsp;</span>ขาด</span>
+        <span><span class="badge bg-primary me-1">&nbsp;</span>กิจกรรมองค์กร (เข้าร่วม)</span>
+        <span><span class="badge me-1" style="background:#F59E0B;">&nbsp;</span>📢 เข้าร่วมได้</span>
+        <span><span class="badge bg-secondary me-1">&nbsp;</span>ไม่เข้าร่วม</span>
         <span><span class="badge" style="background:#64748B;">&nbsp;</span>🔒 กิจกรรมส่วนตัว</span>
     </div>
 </div>
@@ -80,7 +80,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
             if (ep.status) {
                 var statusColor = {'attended':'success','absent':'danger','registered':'secondary'}[ep.status] || 'secondary';
-                var statusLabel = {'attended':'เข้าร่วมแล้ว','absent':'ขาด','registered':'ลงทะเบียน'}[ep.status] || '';
+                var statusLabel = {'attended':'เข้าร่วมแล้ว','absent':'ไม่เข้าร่วม','registered':'ยืนยันเข้าร่วม'}[ep.status] || '';
                 var sb = document.createElement('span');
                 sb.className = 'badge bg-' + statusColor + ' mt-1';
                 sb.textContent = statusLabel;

@@ -219,7 +219,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $updated++;
                 }
                 $pdo->commit();
-                $label = ['registered'=>'รอเช็ค', 'attended'=>'มา', 'absent'=>'ขาด'][$new_status];
+                $label = ['registered'=>'รอเช็ค', 'attended'=>'มา', 'absent'=>'ไม่เข้าร่วม'][$new_status];
                 flash_set('success', "อัปเดตสถานะ \"{$label}\" จำนวน {$updated} รายการ");
             } catch (Throwable $e) {
                 $pdo->rollBack();
@@ -239,6 +239,38 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 ->execute([':id' => $reg_id]);
             audit_log('remove_participant', 'activity_registrations', $reg_id, $old_row, null);
             flash_set('success', 'ลบผู้เข้าร่วมสำเร็จ');
+        }
+
+    } elseif ($action === 'remove_participants_bulk') {
+        $reg_ids = $_POST['reg_ids'] ?? [];
+        if (!is_array($reg_ids) || empty($reg_ids)) {
+            flash_set('error', 'กรุณาเลือกผู้เข้าร่วมที่จะลบ');
+        } else {
+            $reg_ids = array_filter(array_map('intval', $reg_ids), fn($x) => $x > 0);
+            $reg_ids = array_values(array_unique($reg_ids));
+
+            $pdo->beginTransaction();
+            try {
+                $removed = 0;
+                foreach ($reg_ids as $rid) {
+                    $stmt = $pdo->prepare(
+                        'SELECT * FROM activity_registrations WHERE id = :id AND activity_id = :a'
+                    );
+                    $stmt->execute([':id' => $rid, ':a' => $id]);
+                    $old_row = $stmt->fetch();
+                    if (!$old_row) continue;
+
+                    $pdo->prepare('DELETE FROM activity_registrations WHERE id = :id')
+                        ->execute([':id' => $rid]);
+                    audit_log('remove_participant', 'activity_registrations', $rid, $old_row, null);
+                    $removed++;
+                }
+                $pdo->commit();
+                flash_set('success', "ลบผู้เข้าร่วม {$removed} คน");
+            } catch (Throwable $e) {
+                $pdo->rollBack();
+                throw $e;
+            }
         }
 
     } elseif ($action === 'upload_cert') {
@@ -535,9 +567,9 @@ require __DIR__ . '/../includes/header.php';
                 </div>
                 <?php endif; ?>
                 <div class="col-12 col-md-6">
-                    <div class="text-muted small">การสมัคร</div>
+                    <div class="text-muted small">การเข้าร่วม</div>
                     <?php if ((int)$activity['is_open_registration'] === 1): ?>
-                        <span class="badge bg-success">เปิดให้พนักงานสมัครเอง</span>
+                        <span class="badge bg-success">เปิดให้พนักงานเข้าร่วมเอง</span>
                     <?php else: ?>
                         <span class="badge bg-secondary">Admin เพิ่มผู้เข้าร่วมเอง</span>
                     <?php endif; ?>
@@ -718,10 +750,7 @@ require __DIR__ . '/../includes/header.php';
     <div class="tab-pane fade" id="tab-attendance">
         <div class="d-flex flex-column flex-md-row gap-2 mb-3 align-items-md-center justify-content-between">
             <div class="text-muted small">
-                ทั้งหมด <?= count($registrations) ?> คน ·
-                <span class="text-success">มา <?= $attended_count ?></span> ·
-                <span class="text-danger">ขาด <?= $absent_count ?></span> ·
-                <span class="text-warning">รอเช็ค <?= $registered_count ?></span>
+                ทั้งหมด <?= count($registrations) ?> คน
             </div>
             <button type="button" class="btn btn-primary"
                     data-bs-toggle="modal" data-bs-target="#addParticipantsModal"
@@ -736,106 +765,78 @@ require __DIR__ . '/../includes/header.php';
                 <p class="mt-2 mb-0">ยังไม่มีผู้เข้าร่วม — กดปุ่ม "เพิ่มผู้เข้าร่วม"</p>
             </div>
         <?php else: ?>
-            <form method="POST" id="attendanceForm" style="margin: 0;">
+            <form method="POST" id="bulkRemoveForm"
+                  onsubmit="return confirm('ลบผู้เข้าร่วมที่เลือก ' + document.querySelectorAll('.reg-check:checked').length + ' คน?');">
                 <?= csrf_field() ?>
-                <input type="hidden" name="action" value="update_attendance">
+                <input type="hidden" name="action" value="remove_participants_bulk">
                 <input type="hidden" name="_tab" value="tab-attendance">
                 <div id="bulkBar" class="card p-2 mb-2 d-none">
                     <div class="d-flex flex-wrap gap-2 align-items-center">
                         <span class="small me-2">เลือก <span id="bulkCount">0</span> คน:</span>
-                        <button type="submit" name="new_status" value="attended" class="btn btn-sm btn-success">
-                            <i class="bi bi-check-lg"></i> ทำเป็น "มา"
+                        <button type="submit" class="btn btn-sm btn-danger">
+                            <i class="bi bi-trash me-1"></i> ลบที่เลือก
                         </button>
-                        <button type="submit" name="new_status" value="absent" class="btn btn-sm btn-danger">
-                            <i class="bi bi-x-lg"></i> ทำเป็น "ขาด"
-                        </button>
-                        <button type="submit" name="new_status" value="registered" class="btn btn-sm btn-outline-secondary">
-                            <i class="bi bi-arrow-counterclockwise"></i> รีเซ็ต
-                        </button>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="table-responsive">
+                        <table class="table table-stack mb-0 align-middle">
+                            <thead class="bg-light">
+                                <tr>
+                                    <th style="width:36px;"><input type="checkbox" id="selAll" title="เลือกทั้งหมด"></th>
+                                    <th>ชื่อ-สกุล</th>
+                                    <th>แผนก</th>
+                                    <th class="text-end" style="width:48px;"></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <?php foreach ($registrations as $r):
+                                    $name_safe = htmlspecialchars($r['fullname'], ENT_QUOTES, 'UTF-8');
+                                ?>
+                                <tr>
+                                    <td data-label="">
+                                        <input type="checkbox" name="reg_ids[]"
+                                               value="<?= (int)$r['reg_id'] ?>" class="reg-check">
+                                    </td>
+                                    <td data-label="ชื่อ-สกุล">
+                                        <div class="fw-medium"><?= $name_safe ?></div>
+                                        <div class="text-muted small">@<?= htmlspecialchars($r['username'], ENT_QUOTES, 'UTF-8') ?></div>
+                                    </td>
+                                    <td data-label="แผนก" class="small text-muted">
+                                        <?= htmlspecialchars($r['dept_name'] ?? '—', ENT_QUOTES, 'UTF-8') ?>
+                                    </td>
+                                    <td data-label="" class="text-end text-nowrap">
+                                        <div class="dropdown">
+                                            <button type="button" class="btn btn-sm btn-link text-muted p-1"
+                                                    data-bs-toggle="dropdown" aria-expanded="false" title="เมนู">
+                                                <i class="bi bi-three-dots-vertical"></i>
+                                            </button>
+                                            <ul class="dropdown-menu dropdown-menu-end">
+                                                <li>
+                                                    <button type="button" class="dropdown-item text-danger remove-one-btn"
+                                                            data-reg-id="<?= (int)$r['reg_id'] ?>"
+                                                            data-name="<?= $name_safe ?>">
+                                                        <i class="bi bi-trash me-2"></i> ลบออกจากรายชื่อ
+                                                    </button>
+                                                </li>
+                                            </ul>
+                                        </div>
+                                    </td>
+                                </tr>
+                                <?php endforeach; ?>
+                            </tbody>
+                        </table>
                     </div>
                 </div>
             </form>
 
-            <div class="card">
-                <div class="table-responsive">
-                    <table class="table table-stack mb-0 align-middle">
-                        <thead class="bg-light">
-                            <tr>
-                                <th style="width:36px;"><input type="checkbox" id="selAll"></th>
-                                <th>ชื่อ-สกุล</th>
-                                <th>แผนก</th>
-                                <th>สถานะ</th>
-                                <th>เช็คโดย</th>
-                                <th class="text-end">จัดการ</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <?php foreach ($registrations as $r):
-                                $st = $r['status'];
-                                $name_safe = htmlspecialchars($r['fullname'], ENT_QUOTES, 'UTF-8');
-                                $st_badge = match($st) {
-                                    'attended' => '<span class="badge bg-success">เข้าร่วม</span>',
-                                    'absent'   => '<span class="badge bg-danger">ขาด</span>',
-                                    default    => '<span class="badge bg-warning text-dark">รอเช็ค</span>',
-                                };
-                            ?>
-                            <tr>
-                                <td data-label="">
-                                    <input type="checkbox" form="attendanceForm" name="reg_ids[]"
-                                           value="<?= (int)$r['reg_id'] ?>" class="reg-check">
-                                </td>
-                                <td data-label="ชื่อ-สกุล">
-                                    <div class="fw-medium"><?= $name_safe ?></div>
-                                    <div class="text-muted small">@<?= htmlspecialchars($r['username'], ENT_QUOTES, 'UTF-8') ?></div>
-                                </td>
-                                <td data-label="แผนก" class="small text-muted">
-                                    <?= htmlspecialchars($r['dept_name'] ?? '—', ENT_QUOTES, 'UTF-8') ?>
-                                </td>
-                                <td data-label="สถานะ"><?= $st_badge ?></td>
-                                <td data-label="เช็คโดย" class="small text-muted">
-                                    <?php if (!empty($r['checker_name']) && $r['checked_at']): ?>
-                                        <?= htmlspecialchars($r['checker_name'], ENT_QUOTES, 'UTF-8') ?><br>
-                                        <small><?= htmlspecialchars(format_date_th($r['checked_at']), ENT_QUOTES, 'UTF-8') ?></small>
-                                    <?php else: ?>—<?php endif; ?>
-                                </td>
-                                <td data-label="จัดการ" class="text-end text-nowrap">
-                                    <form method="POST" class="d-inline">
-                                        <?= csrf_field() ?>
-                                        <input type="hidden" name="action" value="update_attendance">
-                                        <input type="hidden" name="_tab" value="tab-attendance">
-                                        <input type="hidden" name="reg_ids[]" value="<?= (int)$r['reg_id'] ?>">
-                                        <input type="hidden" name="new_status" value="attended">
-                                        <button type="submit"
-                                                class="btn btn-sm <?= $st==='attended'?'btn-success':'btn-outline-success' ?>"
-                                                title="มา"><i class="bi bi-check-lg"></i></button>
-                                    </form>
-                                    <form method="POST" class="d-inline">
-                                        <?= csrf_field() ?>
-                                        <input type="hidden" name="action" value="update_attendance">
-                                        <input type="hidden" name="_tab" value="tab-attendance">
-                                        <input type="hidden" name="reg_ids[]" value="<?= (int)$r['reg_id'] ?>">
-                                        <input type="hidden" name="new_status" value="absent">
-                                        <button type="submit"
-                                                class="btn btn-sm <?= $st==='absent'?'btn-danger':'btn-outline-danger' ?>"
-                                                title="ขาด"><i class="bi bi-x-lg"></i></button>
-                                    </form>
-                                    <form method="POST" class="d-inline"
-                                          onsubmit="return confirm('ลบ &quot;<?= $name_safe ?>&quot; ออกจากรายชื่อ?');">
-                                        <?= csrf_field() ?>
-                                        <input type="hidden" name="action" value="remove_participant">
-                                        <input type="hidden" name="_tab" value="tab-attendance">
-                                        <input type="hidden" name="reg_id" value="<?= (int)$r['reg_id'] ?>">
-                                        <button type="submit" class="btn btn-sm btn-outline-secondary" title="ลบ">
-                                            <i class="bi bi-trash"></i>
-                                        </button>
-                                    </form>
-                                </td>
-                            </tr>
-                            <?php endforeach; ?>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
+            <form method="POST" id="removeOneForm" class="d-none">
+                <?= csrf_field() ?>
+                <input type="hidden" name="action" value="remove_participant">
+                <input type="hidden" name="_tab" value="tab-attendance">
+                <input type="hidden" name="reg_id" id="removeOneRegId" value="">
+            </form>
         <?php endif; ?>
     </div><!-- /tab-attendance -->
 
@@ -862,7 +863,7 @@ require __DIR__ . '/../includes/header.php';
                             $nm_safe = htmlspecialchars($r['fullname'], ENT_QUOTES, 'UTF-8');
                             $st_badge = match($r['status']) {
                                 'attended' => '<span class="badge bg-success">เข้าร่วม</span>',
-                                'absent'   => '<span class="badge bg-danger">ขาด</span>',
+                                'absent'   => '<span class="badge bg-danger">ไม่เข้าร่วม</span>',
                                 default    => '<span class="badge bg-warning text-dark">รอเช็ค</span>',
                             };
                         ?>
@@ -959,9 +960,14 @@ require __DIR__ . '/../includes/header.php';
                 <div class="modal-body">
                     <input type="text" id="userSearch" class="form-control mb-2"
                            placeholder="ค้นหาชื่อ / username / อีเมล / แผนก">
-                    <div class="form-text mb-2">
-                        เลือก <span id="addSelCount">0</span> คน
-                        — ระบบจะส่งอีเมลแจ้งเตือนให้ผู้ที่เพิ่ม (ถ้าเปิดในตั้งค่า)
+                    <div class="d-flex flex-wrap gap-2 align-items-center mb-2">
+                        <button type="button" id="selectAllUsers" class="btn btn-sm btn-outline-primary">
+                            <i class="bi bi-check2-square me-1"></i> เลือกทั้งหมด
+                        </button>
+                        <div class="form-text ms-auto mb-0">
+                            เลือก <span id="addSelCount">0</span> คน
+                            — ระบบจะส่งอีเมลแจ้งเตือน (ถ้าเปิดในตั้งค่า)
+                        </div>
                     </div>
                     <div class="border rounded" style="max-height: 50vh; overflow-y: auto;">
                         <?php
@@ -1025,11 +1031,14 @@ const MAX_IMAGE_BYTES = <?= mb_to_bytes($max_image_mb) ?>;
 
 let currentPhotoCount = <?= $photo_count ?>;
 
-const hash = window.location.hash.replace('#', '');
-if (hash) {
+window.addEventListener('load', () => {
+    const hash = window.location.hash.replace('#', '');
+    if (!hash) return;
     const trigger = document.querySelector(`[data-bs-target="#${hash}"]`);
-    if (trigger) new bootstrap.Tab(trigger).show();
-}
+    if (trigger && typeof bootstrap !== 'undefined') {
+        new bootstrap.Tab(trigger).show();
+    }
+});
 
 function toggleAttType() {
     const isFile = document.getElementById('attTypeFile').checked;
@@ -1042,49 +1051,87 @@ document.getElementById('attTypeFile').addEventListener('change', toggleAttType)
 document.getElementById('attTypeUrl').addEventListener('change', toggleAttType);
 toggleAttType();
 
-// ===== Bulk attendance =====
-const selAll = document.getElementById('selAll');
-const regChecks = document.querySelectorAll('.reg-check');
-const bulkBar = document.getElementById('bulkBar');
-const bulkCount = document.getElementById('bulkCount');
-
-function updateBulk() {
-    if (!regChecks.length) return;
-    const c = document.querySelectorAll('.reg-check:checked').length;
-    if (bulkCount) bulkCount.textContent = c;
-    if (bulkBar) bulkBar.classList.toggle('d-none', c === 0);
-    if (selAll) selAll.checked = (c === regChecks.length && c > 0);
+// ===== Bulk remove participants (event delegation) =====
+function updateBulkBar() {
+    const bar = document.getElementById('bulkBar');
+    const cnt = document.getElementById('bulkCount');
+    const selAllEl = document.getElementById('selAll');
+    const checks = document.querySelectorAll('.reg-check');
+    if (!bar || !checks.length) return;
+    const checkedCount = document.querySelectorAll('.reg-check:checked').length;
+    if (cnt) cnt.textContent = checkedCount;
+    bar.classList.toggle('d-none', checkedCount === 0);
+    if (selAllEl) selAllEl.checked = (checkedCount === checks.length && checkedCount > 0);
 }
-if (selAll) {
-    selAll.addEventListener('change', () => {
-        regChecks.forEach(c => c.checked = selAll.checked);
-        updateBulk();
+
+document.addEventListener('change', (e) => {
+    if (e.target.id === 'selAll') {
+        document.querySelectorAll('.reg-check').forEach(c => c.checked = e.target.checked);
+        updateBulkBar();
+    } else if (e.target.classList && e.target.classList.contains('reg-check')) {
+        updateBulkBar();
+    }
+});
+
+document.addEventListener('click', (e) => {
+    const btn = e.target.closest('.remove-one-btn');
+    if (!btn) return;
+    if (!confirm('ลบ "' + btn.dataset.name + '" ออกจากรายชื่อ?')) return;
+    const idEl = document.getElementById('removeOneRegId');
+    const fmEl = document.getElementById('removeOneForm');
+    if (idEl && fmEl) {
+        idEl.value = btn.dataset.regId;
+        fmEl.submit();
+    }
+});
+
+// ===== Add participants modal — search filter + selection counter (event delegation) =====
+function visibleUserChecksList() {
+    return Array.from(document.querySelectorAll('.user-check')).filter(c => {
+        const label = c.closest('.user-item');
+        return label && label.style.display !== 'none';
     });
 }
-regChecks.forEach(c => c.addEventListener('change', updateBulk));
-
-// ===== Add participants modal — search filter + selection counter =====
-const userSearch = document.getElementById('userSearch');
-const userItems = document.querySelectorAll('.user-item');
-if (userSearch) {
-    userSearch.addEventListener('input', () => {
-        const q = userSearch.value.toLowerCase().trim();
-        userItems.forEach(item => {
-            const data = item.dataset.search || '';
-            item.style.display = (q === '' || data.includes(q)) ? '' : 'none';
-        });
-    });
-}
-
-const userChecks = document.querySelectorAll('.user-check');
-const addSelCount = document.getElementById('addSelCount');
-const addSubmit = document.getElementById('addSubmit');
 function updateAddCount() {
-    const c = document.querySelectorAll('.user-check:checked').length;
-    if (addSelCount) addSelCount.textContent = c;
-    if (addSubmit) addSubmit.disabled = c === 0;
+    const checked = document.querySelectorAll('.user-check:checked').length;
+    const cnt = document.getElementById('addSelCount');
+    const submit = document.getElementById('addSubmit');
+    const selectAllBtn = document.getElementById('selectAllUsers');
+    if (cnt) cnt.textContent = checked;
+    if (submit) submit.disabled = checked === 0;
+    if (selectAllBtn) {
+        const visible = visibleUserChecksList();
+        const allChecked = visible.length > 0 && visible.every(c => c.checked);
+        selectAllBtn.innerHTML = allChecked
+            ? '<i class="bi bi-x-square me-1"></i> ยกเลิกทั้งหมด'
+            : '<i class="bi bi-check2-square me-1"></i> เลือกทั้งหมด';
+    }
 }
-userChecks.forEach(c => c.addEventListener('change', updateAddCount));
+
+document.addEventListener('change', (e) => {
+    if (e.target.classList && e.target.classList.contains('user-check')) {
+        updateAddCount();
+    }
+});
+
+document.addEventListener('input', (e) => {
+    if (e.target.id !== 'userSearch') return;
+    const q = e.target.value.toLowerCase().trim();
+    document.querySelectorAll('.user-item').forEach(item => {
+        const data = item.dataset.search || '';
+        item.style.display = (q === '' || data.includes(q)) ? '' : 'none';
+    });
+});
+
+document.addEventListener('click', (e) => {
+    if (e.target.closest('#selectAllUsers')) {
+        const visible = visibleUserChecksList();
+        if (visible.length === 0) return;
+        const allChecked = visible.every(c => c.checked);
+        visible.forEach(c => c.checked = !allChecked);
+        updateAddCount();
+    }
+});
 
 <?php if ($can_add_photo): ?>
 const dropZone = document.getElementById('dropZone');

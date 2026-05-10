@@ -123,7 +123,7 @@ $app_url_safe = htmlspecialchars(APP_URL, ENT_QUOTES, 'UTF-8');
     <div class="col-6 col-lg-3">
         <div class="card text-center p-3 h-100">
             <div class="fs-2 fw-bold text-secondary"><?= number_format($total_reg) ?></div>
-            <div class="small text-muted">รายการลงทะเบียน</div>
+            <div class="small text-muted">รายการเข้าร่วม</div>
         </div>
     </div>
     <div class="col-6 col-lg-3">

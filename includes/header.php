@@ -35,7 +35,7 @@ $menus = [
         ['type'=>'item','key'=>'dashboard',           'label'=>'หน้าหลัก',           'icon'=>'bi-speedometer2',     'url'=>'/employee/dashboard.php'],
         ['type'=>'item','key'=>'my_activities',       'label'=>'กิจกรรมของฉัน',      'icon'=>'bi-person-check',     'url'=>'/employee/my_activities.php'],
         ['type'=>'item','key'=>'personal_activities', 'label'=>'กิจกรรมส่วนตัว',     'icon'=>'bi-journal-bookmark', 'url'=>'/employee/personal_activities.php'],
-        ['type'=>'item','key'=>'available',           'label'=>'กิจกรรมที่เปิดรับ',  'icon'=>'bi-megaphone',        'url'=>'/employee/available_activities.php'],
+        ['type'=>'item','key'=>'available',           'label'=>'กิจกรรมที่เข้าร่วมได้','icon'=>'bi-megaphone',        'url'=>'/employee/available_activities.php'],
         ['type'=>'item','key'=>'my_certificates',     'label'=>'เกียรติบัตรของฉัน',  'icon'=>'bi-award',            'url'=>'/employee/my_certificates.php'],
         ['type'=>'item','key'=>'documents',           'label'=>'เอกสารทั่วไป',       'icon'=>'bi-folder2-open',     'url'=>'/employee/documents.php'],
         ['type'=>'item','key'=>'my_calendar',         'label'=>'ปฏิทินของฉัน',       'icon'=>'bi-calendar3',        'url'=>'/employee/calendar.php'],

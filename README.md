@@ -104,7 +104,7 @@ php -S localhost:8000
 |---|---|---|
 | Admin | `admin` | `Admin@2026` |
 | Director | `director` | `Director@2026` |
-| Employee | `kobsak.na` | `Skru@2026` |
+| Employee | `kobsak.na` | `kobsak.na@2026` |
 
 > ทุกบัญชี seed มี `must_change_password = 1` → ครั้งแรก login จะถูกบังคับเปลี่ยนรหัส
 

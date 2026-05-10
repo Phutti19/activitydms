@@ -177,7 +177,7 @@ require __DIR__ . '/../includes/header.php';
             </select>
         </div>
         <div class="col-6 col-md-1">
-            <select name="open" class="form-select" title="การสมัคร">
+            <select name="open" class="form-select" title="การเข้าร่วม">
                 <option value="">ทั้งหมด</option>
                 <option value="1" <?= $f_open==='1'?'selected':'' ?>>เปิด</option>
                 <option value="0" <?= $f_open==='0'?'selected':'' ?>>ปิด</option>
@@ -218,7 +218,7 @@ require __DIR__ . '/../includes/header.php';
                         <?= htmlspecialchars($ts['label'], ENT_QUOTES, 'UTF-8') ?>
                     </span>
                     <?php if ((int)$a['is_open_registration'] === 1 && $ts['key'] === 'upcoming'): ?>
-                        <span class="badge-pill bg-success text-white">เปิดสมัคร</span>
+                        <span class="badge-pill bg-success text-white">เปิดเข้าร่วม</span>
                     <?php endif; ?>
                 </div>
 
@@ -264,7 +264,7 @@ require __DIR__ . '/../includes/header.php';
                             <i class="bi bi-pencil"></i>
                         </a>
                         <form method="POST" class="d-inline"
-                              onsubmit="return confirm('ลบกิจกรรม &quot;<?= $title_safe ?>&quot;?\n\nระบบจะลบภาพ ไฟล์แนบ และการลงทะเบียนทั้งหมด');">
+                              onsubmit="return confirm('ลบกิจกรรม &quot;<?= $title_safe ?>&quot;?\n\nระบบจะลบภาพ ไฟล์แนบ และข้อมูลการเข้าร่วมทั้งหมด');">
                             <?= csrf_field() ?>
                             <input type="hidden" name="action" value="delete">
                             <input type="hidden" name="id" value="<?= (int)$a['id'] ?>">

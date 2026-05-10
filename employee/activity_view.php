@@ -34,7 +34,7 @@ if (!$activity) {
     exit;
 }
 
-// ตรวจสิทธิ์: ต้องลงทะเบียนอยู่แล้ว หรือ กิจกรรมเปิดรับสมัคร
+// ตรวจสิทธิ์: ต้องเข้าร่วมอยู่แล้ว หรือ กิจกรรมเปิดให้เข้าร่วม
 $reg_check = $pdo->prepare(
     'SELECT id, status FROM activity_registrations
      WHERE activity_id = :a AND user_id = :u LIMIT 1'
@@ -59,16 +59,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($action === 'register') {
         if ((bool)$activity['is_open_registration'] && !$my_reg) {
             if (strtotime((string)$activity['end_datetime']) < time()) {
-                flash_set('error', 'กิจกรรมนี้สิ้นสุดแล้ว ไม่สามารถสมัครได้');
+                flash_set('error', 'กิจกรรมนี้สิ้นสุดแล้ว ไม่สามารถเข้าร่วมได้');
             } else {
                 try {
                     $pdo->prepare(
                         'INSERT INTO activity_registrations (activity_id, user_id, status)
                          VALUES (:a, :u, "registered")'
                     )->execute([':a' => $id, ':u' => $uid]);
-                    flash_set('success', 'สมัครเข้าร่วมกิจกรรมสำเร็จ');
+                    flash_set('success', 'เข้าร่วมกิจกรรมสำเร็จ');
                 } catch (PDOException $e) {
-                    flash_set('error', $e->getCode() === '23000' ? 'คุณได้ลงทะเบียนแล้ว' : 'เกิดข้อผิดพลาด');
+                    flash_set('error', $e->getCode() === '23000' ? 'คุณได้เข้าร่วมแล้ว' : 'เกิดข้อผิดพลาด');
                 }
             }
         }
@@ -79,7 +79,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'DELETE FROM activity_registrations
                  WHERE activity_id = :a AND user_id = :u AND status = "registered" LIMIT 1'
             )->execute([':a' => $id, ':u' => $uid]);
-            flash_set('success', 'ยกเลิกการสมัครสำเร็จ');
+            flash_set('success', 'ยกเลิกการเข้าร่วมสำเร็จ');
         }
     }
 
@@ -129,7 +129,7 @@ $ts_label = $ended ? 'เสร็จสิ้น' : ($ongoing ? 'กำลั�
 $ts_bg    = $ended ? '#D1FAE5' : ($ongoing ? '#FEF3C7' : '#DBEAFE');
 $ts_fg    = $ended ? '#065F46' : ($ongoing ? '#92400E' : '#1E40AF');
 
-$reg_label = ['registered'=>'ลงทะเบียนแล้ว','attended'=>'เข้าร่วมแล้ว','absent'=>'ขาด'];
+$reg_label = ['registered'=>'ยืนยันเข้าร่วม','attended'=>'เข้าร่วมแล้ว','absent'=>'ไม่เข้าร่วม'];
 $reg_badge = ['registered'=>'secondary','attended'=>'success','absent'=>'danger'];
 
 $page_title  = htmlspecialchars($activity['title'], ENT_QUOTES, 'UTF-8');
@@ -225,32 +225,32 @@ $app_url_safe = htmlspecialchars(APP_URL, ENT_QUOTES, 'UTF-8');
 
         <?php if ((bool)$activity['is_open_registration']): ?>
         <div class="card p-4">
-            <h6 class="fw-semibold mb-3"><i class="bi bi-megaphone me-1"></i>การสมัครเข้าร่วม</h6>
+            <h6 class="fw-semibold mb-3"><i class="bi bi-megaphone me-1"></i>การเข้าร่วม</h6>
             <?php if (!$my_reg && !$ended): ?>
-            <p class="small text-muted mb-3">กิจกรรมนี้เปิดรับสมัครด้วยตนเอง</p>
+            <p class="small text-muted mb-3">กิจกรรมนี้เข้าร่วมได้ด้วยตนเอง</p>
             <form method="POST">
                 <?= csrf_field() ?>
                 <input type="hidden" name="action" value="register">
                 <button type="submit" class="btn btn-primary w-100">
-                    <i class="bi bi-person-plus me-1"></i>สมัครเข้าร่วม
+                    <i class="bi bi-person-plus me-1"></i>เข้าร่วม
                 </button>
             </form>
 
             <?php elseif ($my_reg && (string)$my_reg['status'] === 'registered' && !$ended): ?>
-            <p class="small text-success mb-3"><i class="bi bi-check-circle me-1"></i>คุณได้ลงทะเบียนแล้ว</p>
+            <p class="small text-success mb-3"><i class="bi bi-check-circle me-1"></i>คุณยืนยันเข้าร่วมแล้ว</p>
             <form method="POST"
-                  onsubmit="return confirm('ยืนยันการยกเลิกสมัครกิจกรรมนี้?');">
+                  onsubmit="return confirm('ยืนยันการยกเลิกเข้าร่วมกิจกรรมนี้?');">
                 <?= csrf_field() ?>
                 <input type="hidden" name="action" value="unregister">
                 <button type="submit" class="btn btn-outline-danger w-100">
-                    <i class="bi bi-person-dash me-1"></i>ยกเลิกการสมัคร
+                    <i class="bi bi-person-dash me-1"></i>ยกเลิกการเข้าร่วม
                 </button>
             </form>
 
             <?php elseif ($my_reg): ?>
             <div class="alert alert-success small mb-0">
                 <i class="bi bi-check-circle me-1"></i>
-                สถานะ: <strong><?= $reg_label[$my_reg['status']] ?? '' ?></strong>
+                คุณเป็นผู้เข้าร่วมกิจกรรมนี้
             </div>
 
             <?php elseif ($ended): ?>
@@ -261,10 +261,13 @@ $app_url_safe = htmlspecialchars(APP_URL, ENT_QUOTES, 'UTF-8');
         </div>
         <?php elseif ($my_reg): ?>
         <div class="card p-4">
-            <h6 class="fw-semibold mb-2">สถานะการเข้าร่วม</h6>
-            <span class="badge bg-<?= $reg_badge[$my_reg['status']] ?? 'secondary' ?> fs-6">
-                <?= $reg_label[$my_reg['status']] ?? '' ?>
-            </span>
+            <div class="d-flex align-items-start gap-2">
+                <i class="bi bi-person-check text-success fs-5"></i>
+                <div>
+                    <h6 class="fw-semibold mb-1">การเข้าร่วม</h6>
+                    <p class="small text-muted mb-0">Admin เพิ่มคุณเข้าร่วมกิจกรรมนี้</p>
+                </div>
+            </div>
         </div>
         <?php endif; ?>
     </div>
