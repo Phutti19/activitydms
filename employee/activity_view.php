@@ -211,7 +211,7 @@ $app_url_safe = htmlspecialchars(APP_URL, ENT_QUOTES, 'UTF-8');
     <div class="col-12 col-lg-4">
         <?php if (!empty($my_cert)): ?>
         <div class="card p-4 mb-3 border-warning">
-            <div class="text-center mb-3" style="font-size:40px;">🏆</div>
+            <div class="text-center mb-3" style="font-size:40px;">📜</div>
             <h6 class="fw-semibold text-center mb-2">เกียรติบัตรของคุณ</h6>
             <p class="small text-muted text-center mb-3">
                 <?= htmlspecialchars($my_cert['original_name'], ENT_QUOTES, 'UTF-8') ?>

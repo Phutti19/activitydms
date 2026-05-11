@@ -666,3 +666,50 @@ a > .card:hover,
     .table-stack tbody td::before { display: none !important; }
     .table-stack tbody td:not([data-label]) { display: table-cell !important; }
 }
+
+/* ===== Time pill: 2 selects ที่ดูเหมือน field เดียว (HH:MM + clock icon) ===== */
+.time-pill {
+    display: flex;
+    align-items: center;
+    gap: 0.15rem;
+    padding: 0.25rem 0.5rem 0.25rem 0.65rem;
+    border: 1px solid #ced4da;
+    border-radius: 0.375rem;
+    background: #fff;
+    min-height: 38px;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.time-pill:focus-within {
+    border-color: #86b7fe;
+    box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, .25);
+}
+.time-pill > .bi {
+    color: #6c757d;
+    font-size: 1rem;
+    flex-shrink: 0;
+    margin-right: 0.25rem;
+}
+.time-pill-select {
+    border: 0;
+    outline: 0;
+    background: transparent;
+    padding: 0.25rem 0.1rem;
+    font: inherit;
+    color: inherit;
+    cursor: pointer;
+    text-align: center;
+    text-align-last: center;
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    background-image: none;
+    flex: 1 1 auto;
+    min-width: 0;
+}
+.time-pill-select:focus { outline: 0; box-shadow: none; }
+.time-pill-select:invalid { color: #6c757d; }
+.time-pill-sep {
+    color: #6c757d;
+    font-weight: 600;
+    user-select: none;
+}

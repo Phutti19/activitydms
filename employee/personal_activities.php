@@ -392,14 +392,41 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 // ---------------------------------------------------------------------------
 // GET — list
 // ---------------------------------------------------------------------------
-$q = trim((string)($_GET['q'] ?? ''));
+$q          = trim((string)($_GET['q'] ?? ''));
+$f_type     = (int)($_GET['type'] ?? 0);
+$f_fiscal   = (int)($_GET['fiscal'] ?? 0);
+$f_status   = trim((string)($_GET['status'] ?? ''));   // upcoming | ongoing | done
+$f_cert     = trim((string)($_GET['cert'] ?? ''));     // has | none
 
 $where  = ['a.scope = "personal"', 'a.created_by = :uid'];
 $params = [':uid' => $uid];
 if ($q !== '') {
-    $where[] = '(a.title LIKE :q OR a.location LIKE :q2)';
+    $where[] = '(a.title LIKE :q OR a.location LIKE :q2 OR a.description LIKE :q3)';
     $params[':q']  = '%' . $q . '%';
     $params[':q2'] = '%' . $q . '%';
+    $params[':q3'] = '%' . $q . '%';
+}
+if ($f_type > 0) {
+    $where[] = 'a.activity_type_id = :ftype';
+    $params[':ftype'] = $f_type;
+}
+if ($f_fiscal > 0) {
+    $where[] = 'a.fiscal_year_id = :ffy';
+    $params[':ffy'] = $f_fiscal;
+}
+if ($f_status === 'upcoming') {
+    $where[] = 'a.start_datetime > NOW()';
+} elseif ($f_status === 'ongoing') {
+    $where[] = 'a.start_datetime <= NOW() AND a.end_datetime >= NOW()';
+} elseif ($f_status === 'done') {
+    $where[] = 'a.end_datetime < NOW()';
+}
+if ($f_cert === 'has') {
+    $where[] = 'EXISTS (SELECT 1 FROM certificates c WHERE c.activity_id = a.id AND c.user_id = :cuid)';
+    $params[':cuid'] = $uid;
+} elseif ($f_cert === 'none') {
+    $where[] = 'NOT EXISTS (SELECT 1 FROM certificates c WHERE c.activity_id = a.id AND c.user_id = :cuid)';
+    $params[':cuid'] = $uid;
 }
 
 $stmt = $pdo->prepare(
@@ -412,6 +439,8 @@ $stmt = $pdo->prepare(
 );
 $stmt->execute($params);
 $activities = $stmt->fetchAll();
+
+$has_filter = ($q !== '' || $f_type > 0 || $f_fiscal > 0 || $f_status !== '' || $f_cert !== '');
 
 // Group attachments by activity_id (เฉพาะ personal ของ user คนนี้ ตาม scope filter ข้างบน)
 $attach_map = [];
@@ -483,27 +512,75 @@ require __DIR__ . '/../includes/header.php';
 </div>
 
 <form method="GET" class="card p-3 mb-3">
-    <div class="row g-2">
-        <div class="col-10 col-md-8">
-            <input type="text" name="q" class="form-control" placeholder="ค้นหาชื่อ / สถานที่"
+    <div class="row g-2 align-items-end">
+        <div class="col-12 col-md-6 col-lg-3">
+            <label class="form-label small text-muted mb-1">
+                <i class="bi bi-search"></i> ค้นหา
+            </label>
+            <input type="text" name="q" class="form-control" placeholder="ชื่อ / สถานที่ / รายละเอียด"
                    value="<?= htmlspecialchars($q, ENT_QUOTES, 'UTF-8') ?>">
         </div>
-        <div class="col-2 col-md-2">
-            <button type="submit" class="btn btn-outline-primary w-100"><i class="bi bi-search"></i></button>
+        <div class="col-6 col-md-3 col-lg-2">
+            <label class="form-label small text-muted mb-1">ประเภท</label>
+            <select name="type" class="form-select">
+                <option value="0">— ทั้งหมด —</option>
+                <?php foreach ($types as $t): ?>
+                <option value="<?= (int)$t['id'] ?>" <?= $f_type === (int)$t['id'] ? 'selected' : '' ?>>
+                    <?= htmlspecialchars($t['name'], ENT_QUOTES, 'UTF-8') ?>
+                </option>
+                <?php endforeach; ?>
+            </select>
         </div>
-        <?php if ($q !== ''): ?>
-        <div class="col-12 col-md-2">
+        <div class="col-6 col-md-3 col-lg-2">
+            <label class="form-label small text-muted mb-1">ปีงบประมาณ</label>
+            <select name="fiscal" class="form-select">
+                <option value="0">— ทั้งหมด —</option>
+                <?php foreach ($years as $y): ?>
+                <option value="<?= (int)$y['id'] ?>" <?= $f_fiscal === (int)$y['id'] ? 'selected' : '' ?>>
+                    <?= htmlspecialchars($y['name'], ENT_QUOTES, 'UTF-8') ?>
+                </option>
+                <?php endforeach; ?>
+            </select>
+        </div>
+        <div class="col-6 col-md-3 col-lg-2">
+            <label class="form-label small text-muted mb-1">สถานะ</label>
+            <select name="status" class="form-select">
+                <option value="">— ทั้งหมด —</option>
+                <option value="upcoming" <?= $f_status === 'upcoming' ? 'selected' : '' ?>>กำลังจะมาถึง</option>
+                <option value="ongoing"  <?= $f_status === 'ongoing'  ? 'selected' : '' ?>>กำลังดำเนินอยู่</option>
+                <option value="done"     <?= $f_status === 'done'     ? 'selected' : '' ?>>เสร็จสิ้น</option>
+            </select>
+        </div>
+        <div class="col-6 col-md-3 col-lg-2">
+            <label class="form-label small text-muted mb-1">เกียรติบัตร</label>
+            <select name="cert" class="form-select">
+                <option value="">— ทั้งหมด —</option>
+                <option value="has"  <?= $f_cert === 'has'  ? 'selected' : '' ?>>มีเกียรติบัตร</option>
+                <option value="none" <?= $f_cert === 'none' ? 'selected' : '' ?>>ยังไม่มี</option>
+            </select>
+        </div>
+        <div class="col-12 col-lg-1 d-flex gap-1">
+            <button type="submit" class="btn btn-primary flex-grow-1" title="ค้นหา">
+                <i class="bi bi-search"></i>
+            </button>
+            <?php if ($has_filter): ?>
             <a href="<?= htmlspecialchars(APP_URL, ENT_QUOTES, 'UTF-8') ?>/employee/personal_activities.php"
-               class="btn btn-outline-secondary w-100">ล้าง</a>
+               class="btn btn-outline-secondary flex-grow-1" title="ล้างตัวกรอง">
+                <i class="bi bi-x-lg"></i>
+            </a>
+            <?php endif; ?>
         </div>
-        <?php endif; ?>
     </div>
 </form>
 
 <?php if (empty($activities)): ?>
 <div class="card p-5 text-center text-muted">
     <i class="bi bi-journal-bookmark" style="font-size:48px;opacity:0.3;"></i>
+    <?php if ($has_filter): ?>
+    <p class="mt-2 mb-0">ไม่พบกิจกรรมที่ตรงกับเงื่อนไขที่เลือก — ลองล้างตัวกรองดู</p>
+    <?php else: ?>
     <p class="mt-2 mb-0">ยังไม่มีกิจกรรมส่วนตัว — กดปุ่ม "สร้างกิจกรรม" เพื่อเริ่มต้น</p>
+    <?php endif; ?>
 </div>
 <?php else: ?>
 <div class="row g-3">
@@ -547,97 +624,19 @@ require __DIR__ . '/../includes/header.php';
 
             <?php
             $cert = $cert_map[(int)$a['id']] ?? null;
-            ?>
-            <div class="border-top pt-2 mt-1">
-                <div class="small fw-medium text-muted mb-1">
-                    <i class="bi bi-award"></i> เกียรติบัตร
-                </div>
-                <?php if ($cert): ?>
-                <div class="d-flex align-items-center justify-content-between gap-2 small">
-                    <a href="<?= htmlspecialchars(APP_URL, ENT_QUOTES, 'UTF-8') ?>/api/download.php?type=cert&id=<?= (int)$cert['id'] ?>"
-                       class="text-decoration-none text-truncate" target="_blank" rel="noopener"
-                       title="<?= htmlspecialchars($cert['original_name'], ENT_QUOTES, 'UTF-8') ?>">
-                        <i class="bi bi-file-earmark-check me-1 text-warning"></i>
-                        <?= htmlspecialchars($cert['original_name'], ENT_QUOTES, 'UTF-8') ?>
-                    </a>
-                    <form method="POST" class="m-0"
-                          onsubmit="return confirm('ลบเกียรติบัตรของ &quot;<?= htmlspecialchars($a['title'], ENT_QUOTES, 'UTF-8') ?>&quot;?');">
-                        <?= csrf_field() ?>
-                        <input type="hidden" name="action" value="delete_cert">
-                        <input type="hidden" name="cert_id" value="<?= (int)$cert['id'] ?>">
-                        <button type="submit" class="btn btn-sm btn-link text-danger p-0" title="ลบเกียรติบัตร">
-                            <i class="bi bi-x-circle"></i>
-                        </button>
-                    </form>
-                </div>
-                <?php else: ?>
-                <form method="POST" enctype="multipart/form-data" class="d-flex gap-1 align-items-center">
-                    <?= csrf_field() ?>
-                    <input type="hidden" name="action" value="upload_cert">
-                    <input type="hidden" name="activity_id" value="<?= (int)$a['id'] ?>">
-                    <input type="file" name="cert_file" class="form-control form-control-sm"
-                           accept=".pdf,.jpg,.jpeg,.png" required>
-                    <button type="submit" class="btn btn-sm btn-warning flex-shrink-0" title="อัปโหลด">
-                        <i class="bi bi-upload"></i>
-                    </button>
-                </form>
-                <div class="form-text small mb-0">PDF ≤ 10MB / JPG-PNG ≤ 5MB</div>
-                <?php endif; ?>
-            </div>
-
-            <?php
             $atts = $attach_map[(int)$a['id']] ?? [];
             $att_count = count($atts);
             $att_remaining = PA_ATTACH_MAX_FILES - $att_count;
             ?>
-            <div class="border-top pt-2 mt-1">
-                <div class="small fw-medium text-muted mb-1">
-                    <i class="bi bi-paperclip"></i> ไฟล์แนบ (<?= $att_count ?>/<?= PA_ATTACH_MAX_FILES ?>)
-                </div>
-                <?php if ($att_count > 0): ?>
-                <ul class="list-unstyled mb-2 small d-flex flex-column gap-1">
-                <?php foreach ($atts as $att):
-                    $att_label = trim((string)$att['label']) !== '' ? $att['label'] : 'ไฟล์แนบ';
-                    $att_label_safe = htmlspecialchars($att_label, ENT_QUOTES, 'UTF-8');
-                ?>
-                    <li class="d-flex align-items-center justify-content-between gap-2">
-                        <a href="<?= htmlspecialchars(APP_URL, ENT_QUOTES, 'UTF-8') ?>/api/download.php?type=attachment&id=<?= (int)$att['id'] ?>"
-                           class="text-decoration-none text-truncate" target="_blank" rel="noopener"
-                           title="<?= $att_label_safe ?>">
-                            <i class="bi bi-file-earmark-text me-1"></i><?= $att_label_safe ?>
-                        </a>
-                        <form method="POST" class="m-0"
-                              onsubmit="return confirm('ลบไฟล์แนบ &quot;<?= $att_label_safe ?>&quot;?');">
-                            <?= csrf_field() ?>
-                            <input type="hidden" name="action" value="delete_attachment">
-                            <input type="hidden" name="attachment_id" value="<?= (int)$att['id'] ?>">
-                            <button type="submit" class="btn btn-sm btn-link text-danger p-0" title="ลบไฟล์">
-                                <i class="bi bi-x-circle"></i>
-                            </button>
-                        </form>
-                    </li>
-                <?php endforeach; ?>
-                </ul>
-                <?php endif; ?>
-
-                <?php if ($att_remaining > 0): ?>
-                <form method="POST" enctype="multipart/form-data"
-                      class="d-flex gap-1 align-items-center attach-add-form">
-                    <?= csrf_field() ?>
-                    <input type="hidden" name="action" value="upload_attachment">
-                    <input type="hidden" name="activity_id" value="<?= (int)$a['id'] ?>">
-                    <input type="file" name="attachments[]" class="form-control form-control-sm attach-add-input"
-                           multiple
-                           accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.jpg,.jpeg,.png,.webp"
-                           required>
-                    <button type="submit" class="btn btn-sm btn-outline-primary flex-shrink-0" title="เพิ่มไฟล์แนบ">
-                        <i class="bi bi-plus-lg"></i>
-                    </button>
-                </form>
-                <div class="form-text small mb-0">
-                    เพิ่มได้อีก <?= $att_remaining ?> ไฟล์ — สูงสุด 10 MB ต่อไฟล์
-                </div>
-                <?php endif; ?>
+            <div class="d-flex flex-wrap gap-1 mt-1">
+                <span class="badge rounded-pill bg-light text-dark border d-inline-flex align-items-center gap-1 fw-normal">
+                    <i class="bi bi-award <?= $cert ? 'text-warning' : 'text-muted' ?>"></i>
+                    <?= $cert ? 'มีเกียรติบัตร' : 'ยังไม่มีเกียรติบัตร' ?>
+                </span>
+                <span class="badge rounded-pill bg-light text-dark border d-inline-flex align-items-center gap-1 fw-normal">
+                    <i class="bi bi-paperclip <?= $att_count > 0 ? 'text-primary' : 'text-muted' ?>"></i>
+                    ไฟล์แนบ <?= $att_count ?>/<?= PA_ATTACH_MAX_FILES ?>
+                </span>
             </div>
 
             <div class="mt-auto d-flex align-items-center justify-content-between pt-1">
@@ -646,6 +645,11 @@ require __DIR__ . '/../includes/header.php';
                     <?= $ts_label ?>
                 </span>
                 <div class="d-flex gap-1">
+                    <button type="button" class="btn btn-sm btn-outline-warning"
+                            data-bs-toggle="modal" data-bs-target="#filesModal-<?= (int)$a['id'] ?>"
+                            title="จัดการไฟล์">
+                        <i class="bi bi-folder2-open"></i>
+                    </button>
                     <button type="button" class="btn btn-sm btn-outline-primary edit-btn"
                             data-bs-toggle="modal" data-bs-target="#activityModal"
                             data-id="<?= (int)$a['id'] ?>"
@@ -677,6 +681,121 @@ require __DIR__ . '/../includes/header.php';
                         </button>
                     </form>
                 </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Files modal — เกียรติบัตร + ไฟล์แนบของกิจกรรมนี้ -->
+<div class="modal fade" id="filesModal-<?= (int)$a['id'] ?>" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-fullscreen-sm-down">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="bi bi-folder2-open me-1"></i>
+                    จัดการไฟล์ — <?= htmlspecialchars($a['title'], ENT_QUOTES, 'UTF-8') ?>
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body d-flex flex-column gap-3">
+                <!-- เกียรติบัตร -->
+                <section>
+                    <div class="fw-medium mb-2">
+                        <i class="bi bi-award text-warning"></i> เกียรติบัตร
+                    </div>
+                    <?php if ($cert): ?>
+                    <div class="d-flex align-items-center justify-content-between gap-2 small p-2 border rounded">
+                        <a href="<?= htmlspecialchars(APP_URL, ENT_QUOTES, 'UTF-8') ?>/api/download.php?type=cert&id=<?= (int)$cert['id'] ?>"
+                           class="text-decoration-none text-truncate" target="_blank" rel="noopener"
+                           title="<?= htmlspecialchars($cert['original_name'], ENT_QUOTES, 'UTF-8') ?>">
+                            <i class="bi bi-file-earmark-check me-1 text-warning"></i>
+                            <?= htmlspecialchars($cert['original_name'], ENT_QUOTES, 'UTF-8') ?>
+                        </a>
+                        <form method="POST" class="m-0"
+                              onsubmit="return confirm('ลบเกียรติบัตรของ &quot;<?= htmlspecialchars($a['title'], ENT_QUOTES, 'UTF-8') ?>&quot;?');">
+                            <?= csrf_field() ?>
+                            <input type="hidden" name="action" value="delete_cert">
+                            <input type="hidden" name="cert_id" value="<?= (int)$cert['id'] ?>">
+                            <button type="submit" class="btn btn-sm btn-outline-danger" title="ลบเกียรติบัตร">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </form>
+                    </div>
+                    <?php else: ?>
+                    <form method="POST" enctype="multipart/form-data" class="d-flex gap-2 align-items-center">
+                        <?= csrf_field() ?>
+                        <input type="hidden" name="action" value="upload_cert">
+                        <input type="hidden" name="activity_id" value="<?= (int)$a['id'] ?>">
+                        <input type="file" name="cert_file" class="form-control form-control-sm"
+                               accept=".pdf,.jpg,.jpeg,.png" required>
+                        <button type="submit" class="btn btn-sm btn-warning flex-shrink-0">
+                            <i class="bi bi-upload me-1"></i> อัปโหลด
+                        </button>
+                    </form>
+                    <div class="form-text small">PDF ≤ 10MB / JPG-PNG ≤ 5MB</div>
+                    <?php endif; ?>
+                </section>
+
+                <!-- ไฟล์แนบ -->
+                <section>
+                    <div class="fw-medium mb-2">
+                        <i class="bi bi-paperclip text-primary"></i>
+                        ไฟล์แนบ (<?= $att_count ?>/<?= PA_ATTACH_MAX_FILES ?>)
+                    </div>
+                    <?php if ($att_count > 0): ?>
+                    <ul class="list-unstyled mb-2 small d-flex flex-column gap-1">
+                    <?php foreach ($atts as $att):
+                        $att_label = trim((string)$att['label']) !== '' ? $att['label'] : 'ไฟล์แนบ';
+                        $att_label_safe = htmlspecialchars($att_label, ENT_QUOTES, 'UTF-8');
+                    ?>
+                        <li class="d-flex align-items-center justify-content-between gap-2 p-2 border rounded">
+                            <a href="<?= htmlspecialchars(APP_URL, ENT_QUOTES, 'UTF-8') ?>/api/download.php?type=attachment&id=<?= (int)$att['id'] ?>"
+                               class="text-decoration-none text-truncate" target="_blank" rel="noopener"
+                               title="<?= $att_label_safe ?>">
+                                <i class="bi bi-file-earmark-text me-1"></i><?= $att_label_safe ?>
+                            </a>
+                            <form method="POST" class="m-0"
+                                  onsubmit="return confirm('ลบไฟล์แนบ &quot;<?= $att_label_safe ?>&quot;?');">
+                                <?= csrf_field() ?>
+                                <input type="hidden" name="action" value="delete_attachment">
+                                <input type="hidden" name="attachment_id" value="<?= (int)$att['id'] ?>">
+                                <button type="submit" class="btn btn-sm btn-outline-danger" title="ลบไฟล์">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </form>
+                        </li>
+                    <?php endforeach; ?>
+                    </ul>
+                    <?php else: ?>
+                    <p class="small text-muted mb-2">ยังไม่มีไฟล์แนบ</p>
+                    <?php endif; ?>
+
+                    <?php if ($att_remaining > 0): ?>
+                    <form method="POST" enctype="multipart/form-data"
+                          class="d-flex gap-2 align-items-center attach-add-form">
+                        <?= csrf_field() ?>
+                        <input type="hidden" name="action" value="upload_attachment">
+                        <input type="hidden" name="activity_id" value="<?= (int)$a['id'] ?>">
+                        <input type="file" name="attachments[]" class="form-control form-control-sm attach-add-input"
+                               multiple
+                               accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.jpg,.jpeg,.png,.webp"
+                               required>
+                        <button type="submit" class="btn btn-sm btn-primary flex-shrink-0">
+                            <i class="bi bi-plus-lg me-1"></i> เพิ่ม
+                        </button>
+                    </form>
+                    <div class="form-text small">
+                        เพิ่มได้อีก <?= $att_remaining ?> ไฟล์ — สูงสุด 10 MB ต่อไฟล์
+                    </div>
+                    <?php else: ?>
+                    <div class="alert alert-warning small mb-0 py-2">
+                        <i class="bi bi-info-circle"></i> ครบจำนวนสูงสุด <?= PA_ATTACH_MAX_FILES ?> ไฟล์แล้ว
+                    </div>
+                    <?php endif; ?>
+                </section>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">ปิด</button>
             </div>
         </div>
     </div>
@@ -727,48 +846,52 @@ require __DIR__ . '/../includes/header.php';
                     <div class="col-12 col-md-6">
                         <label for="fStartDate" class="form-label fw-medium">วันเวลาเริ่ม <span class="text-danger">*</span></label>
                         <div class="row g-1">
-                            <div class="col-6">
+                            <div class="col-7">
                                 <input type="date" id="fStartDate" name="start_date" class="form-control" required>
                             </div>
-                            <div class="col-3">
-                                <select id="fStartHour" name="start_hour" class="form-select" required aria-label="ชั่วโมง">
-                                    <option value="">ชม.</option>
-                                    <?php for ($h = 0; $h < 24; $h++): $hv = sprintf('%02d', $h); ?>
-                                    <option value="<?= $hv ?>"><?= $hv ?></option>
-                                    <?php endfor; ?>
-                                </select>
-                            </div>
-                            <div class="col-3">
-                                <select id="fStartMinute" name="start_minute" class="form-select" required aria-label="นาที">
-                                    <option value="">นาที</option>
-                                    <?php for ($m = 0; $m < 60; $m += 5): $mv = sprintf('%02d', $m); ?>
-                                    <option value="<?= $mv ?>"><?= $mv ?></option>
-                                    <?php endfor; ?>
-                                </select>
+                            <div class="col-5">
+                                <div class="time-pill">
+                                    <i class="bi bi-clock"></i>
+                                    <select id="fStartHour" name="start_hour" class="time-pill-select" required aria-label="ชั่วโมงเริ่ม">
+                                        <option value="" disabled selected>HH</option>
+                                        <?php for ($h = 0; $h < 24; $h++): $hv = sprintf('%02d', $h); ?>
+                                        <option value="<?= $hv ?>"><?= $hv ?></option>
+                                        <?php endfor; ?>
+                                    </select>
+                                    <span class="time-pill-sep">:</span>
+                                    <select id="fStartMinute" name="start_minute" class="time-pill-select" required aria-label="นาทีเริ่ม">
+                                        <option value="" disabled selected>MM</option>
+                                        <?php for ($m = 0; $m < 60; $m += 5): $mv = sprintf('%02d', $m); ?>
+                                        <option value="<?= $mv ?>"><?= $mv ?></option>
+                                        <?php endfor; ?>
+                                    </select>
+                                </div>
                             </div>
                         </div>
                     </div>
                     <div class="col-12 col-md-6">
                         <label for="fEndDate" class="form-label fw-medium">วันเวลาสิ้นสุด <span class="text-danger">*</span></label>
                         <div class="row g-1">
-                            <div class="col-6">
+                            <div class="col-7">
                                 <input type="date" id="fEndDate" name="end_date" class="form-control" required>
                             </div>
-                            <div class="col-3">
-                                <select id="fEndHour" name="end_hour" class="form-select" required aria-label="ชั่วโมง">
-                                    <option value="">ชม.</option>
-                                    <?php for ($h = 0; $h < 24; $h++): $hv = sprintf('%02d', $h); ?>
-                                    <option value="<?= $hv ?>"><?= $hv ?></option>
-                                    <?php endfor; ?>
-                                </select>
-                            </div>
-                            <div class="col-3">
-                                <select id="fEndMinute" name="end_minute" class="form-select" required aria-label="นาที">
-                                    <option value="">นาที</option>
-                                    <?php for ($m = 0; $m < 60; $m += 5): $mv = sprintf('%02d', $m); ?>
-                                    <option value="<?= $mv ?>"><?= $mv ?></option>
-                                    <?php endfor; ?>
-                                </select>
+                            <div class="col-5">
+                                <div class="time-pill">
+                                    <i class="bi bi-clock"></i>
+                                    <select id="fEndHour" name="end_hour" class="time-pill-select" required aria-label="ชั่วโมงสิ้นสุด">
+                                        <option value="" disabled selected>HH</option>
+                                        <?php for ($h = 0; $h < 24; $h++): $hv = sprintf('%02d', $h); ?>
+                                        <option value="<?= $hv ?>"><?= $hv ?></option>
+                                        <?php endfor; ?>
+                                    </select>
+                                    <span class="time-pill-sep">:</span>
+                                    <select id="fEndMinute" name="end_minute" class="time-pill-select" required aria-label="นาทีสิ้นสุด">
+                                        <option value="" disabled selected>MM</option>
+                                        <?php for ($m = 0; $m < 60; $m += 5): $mv = sprintf('%02d', $m); ?>
+                                        <option value="<?= $mv ?>"><?= $mv ?></option>
+                                        <?php endfor; ?>
+                                    </select>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -890,6 +1013,7 @@ fAttach.addEventListener('change', () => checkOversize(fAttach));
 document.querySelectorAll('.attach-add-input').forEach((el) => {
     el.addEventListener('change', () => checkOversize(el));
 });
+
 </script>
 
 <?php require __DIR__ . '/../includes/footer.php'; ?>

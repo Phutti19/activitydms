@@ -261,25 +261,27 @@ require __DIR__ . '/../includes/header.php';
                     เริ่มต้น <span class="text-danger">*</span>
                 </label>
                 <div class="row g-1">
-                    <div class="col-6">
+                    <div class="col-7">
                         <input type="date" id="aStartDate" name="start_date" class="form-control" required
                                value="<?= htmlspecialchars($start_date_val, ENT_QUOTES, 'UTF-8') ?>">
                     </div>
-                    <div class="col-3">
-                        <select name="start_hour" class="form-select" required aria-label="ชั่วโมง">
-                            <option value="">ชม.</option>
-                            <?php for ($h = 0; $h < 24; $h++): $hv = sprintf('%02d', $h); ?>
-                            <option value="<?= $hv ?>" <?= $start_hour_val === $hv ? 'selected' : '' ?>><?= $hv ?></option>
-                            <?php endfor; ?>
-                        </select>
-                    </div>
-                    <div class="col-3">
-                        <select name="start_minute" class="form-select" required aria-label="นาที">
-                            <option value="">นาที</option>
-                            <?php for ($m = 0; $m < 60; $m += 5): $mv = sprintf('%02d', $m); ?>
-                            <option value="<?= $mv ?>" <?= $start_minute_val === $mv ? 'selected' : '' ?>><?= $mv ?></option>
-                            <?php endfor; ?>
-                        </select>
+                    <div class="col-5">
+                        <div class="time-pill">
+                            <i class="bi bi-clock"></i>
+                            <select name="start_hour" class="time-pill-select" required aria-label="ชั่วโมงเริ่ม">
+                                <option value="" disabled <?= $start_hour_val === '' ? 'selected' : '' ?>>HH</option>
+                                <?php for ($h = 0; $h < 24; $h++): $hv = sprintf('%02d', $h); ?>
+                                <option value="<?= $hv ?>" <?= $start_hour_val === $hv ? 'selected' : '' ?>><?= $hv ?></option>
+                                <?php endfor; ?>
+                            </select>
+                            <span class="time-pill-sep">:</span>
+                            <select name="start_minute" class="time-pill-select" required aria-label="นาทีเริ่ม">
+                                <option value="" disabled <?= $start_minute_val === '' ? 'selected' : '' ?>>MM</option>
+                                <?php for ($m = 0; $m < 60; $m += 5): $mv = sprintf('%02d', $m); ?>
+                                <option value="<?= $mv ?>" <?= $start_minute_val === $mv ? 'selected' : '' ?>><?= $mv ?></option>
+                                <?php endfor; ?>
+                            </select>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -288,25 +290,27 @@ require __DIR__ . '/../includes/header.php';
                     สิ้นสุด <span class="text-danger">*</span>
                 </label>
                 <div class="row g-1">
-                    <div class="col-6">
+                    <div class="col-7">
                         <input type="date" id="aEndDate" name="end_date" class="form-control" required
                                value="<?= htmlspecialchars($end_date_val, ENT_QUOTES, 'UTF-8') ?>">
                     </div>
-                    <div class="col-3">
-                        <select name="end_hour" class="form-select" required aria-label="ชั่วโมง">
-                            <option value="">ชม.</option>
-                            <?php for ($h = 0; $h < 24; $h++): $hv = sprintf('%02d', $h); ?>
-                            <option value="<?= $hv ?>" <?= $end_hour_val === $hv ? 'selected' : '' ?>><?= $hv ?></option>
-                            <?php endfor; ?>
-                        </select>
-                    </div>
-                    <div class="col-3">
-                        <select name="end_minute" class="form-select" required aria-label="นาที">
-                            <option value="">นาที</option>
-                            <?php for ($m = 0; $m < 60; $m += 5): $mv = sprintf('%02d', $m); ?>
-                            <option value="<?= $mv ?>" <?= $end_minute_val === $mv ? 'selected' : '' ?>><?= $mv ?></option>
-                            <?php endfor; ?>
-                        </select>
+                    <div class="col-5">
+                        <div class="time-pill">
+                            <i class="bi bi-clock"></i>
+                            <select name="end_hour" class="time-pill-select" required aria-label="ชั่วโมงสิ้นสุด">
+                                <option value="" disabled <?= $end_hour_val === '' ? 'selected' : '' ?>>HH</option>
+                                <?php for ($h = 0; $h < 24; $h++): $hv = sprintf('%02d', $h); ?>
+                                <option value="<?= $hv ?>" <?= $end_hour_val === $hv ? 'selected' : '' ?>><?= $hv ?></option>
+                                <?php endfor; ?>
+                            </select>
+                            <span class="time-pill-sep">:</span>
+                            <select name="end_minute" class="time-pill-select" required aria-label="นาทีสิ้นสุด">
+                                <option value="" disabled <?= $end_minute_val === '' ? 'selected' : '' ?>>MM</option>
+                                <?php for ($m = 0; $m < 60; $m += 5): $mv = sprintf('%02d', $m); ?>
+                                <option value="<?= $mv ?>" <?= $end_minute_val === $mv ? 'selected' : '' ?>><?= $mv ?></option>
+                                <?php endfor; ?>
+                            </select>
+                        </div>
                     </div>
                 </div>
             </div>

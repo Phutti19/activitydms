@@ -143,7 +143,7 @@ $app_url_safe = htmlspecialchars(APP_URL, ENT_QUOTES, 'UTF-8');
     <ul class="list-group list-group-flush">
         <?php foreach ($recent_certs as $c): ?>
         <li class="list-group-item d-flex align-items-center gap-3 py-3">
-            <span style="font-size:24px;">🏆</span>
+            <span style="font-size:24px;">📜</span>
             <div class="flex-grow-1 overflow-hidden">
                 <div class="fw-medium text-truncate">
                     <?= htmlspecialchars($c['activity_title'], ENT_QUOTES, 'UTF-8') ?>

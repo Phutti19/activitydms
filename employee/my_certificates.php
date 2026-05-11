@@ -79,7 +79,7 @@ require __DIR__ . '/../includes/header.php';
     <div class="card h-100" style="border-top: 4px solid <?= htmlspecialchars($color, ENT_QUOTES, 'UTF-8') ?>;">
         <div class="card-body d-flex flex-column gap-2">
             <div class="d-flex align-items-start gap-3">
-                <div style="font-size:36px;line-height:1;flex-shrink:0;">🏆</div>
+                <div style="font-size:36px;line-height:1;flex-shrink:0;">📜</div>
                 <div class="overflow-hidden">
                     <h6 class="fw-semibold mb-1 lh-sm">
                         <?= htmlspecialchars($c['activity_title'], ENT_QUOTES, 'UTF-8') ?>
