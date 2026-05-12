@@ -6,7 +6,8 @@ require_role('employee');
 
 $pdo = db();
 
-$q = trim((string)($_GET['q'] ?? ''));
+$q       = trim((string)($_GET['q'] ?? ''));
+$f_type  = trim((string)($_GET['type'] ?? '')); // pdf | word | excel | ppt | image
 
 $where  = ['d.activity_id IS NULL'];
 $params = [];
@@ -15,6 +16,19 @@ if ($q !== '') {
     $params[':q']  = '%' . $q . '%';
     $params[':q2'] = '%' . $q . '%';
 }
+
+$mime_map = [
+    'pdf'   => ["d.mime_type LIKE '%pdf%'"],
+    'word'  => ["d.mime_type LIKE '%word%' OR d.mime_type LIKE '%officedocument.wordprocessing%'"],
+    'excel' => ["d.mime_type LIKE '%excel%' OR d.mime_type LIKE '%spreadsheet%'"],
+    'ppt'   => ["d.mime_type LIKE '%powerpoint%' OR d.mime_type LIKE '%presentation%'"],
+    'image' => ["d.mime_type LIKE 'image/%'"],
+];
+if (isset($mime_map[$f_type])) {
+    $where[] = '(' . $mime_map[$f_type][0] . ')';
+}
+
+$has_filter = ($q !== '' || $f_type !== '');
 
 $stmt = $pdo->prepare(
     "SELECT d.id, d.title, d.original_name, d.file_size, d.mime_type, d.created_at,
@@ -54,20 +68,36 @@ $app_url_safe = htmlspecialchars(APP_URL, ENT_QUOTES, 'UTF-8');
 </div>
 
 <form method="GET" class="card p-3 mb-3">
-    <div class="row g-2">
-        <div class="col-10 col-md-9">
-            <input type="text" name="q" class="form-control" placeholder="ค้นหาชื่อเอกสาร..."
+    <div class="row g-2 align-items-end">
+        <div class="col-12 col-md-7 col-lg-8">
+            <label class="form-label small text-muted mb-1">
+                <i class="bi bi-search"></i> ค้นหา
+            </label>
+            <input type="text" name="q" class="form-control" placeholder="ชื่อเอกสาร / ชื่อไฟล์"
                    value="<?= htmlspecialchars($q, ENT_QUOTES, 'UTF-8') ?>">
         </div>
-        <div class="col-2 col-md-2">
-            <button type="submit" class="btn btn-outline-primary w-100"><i class="bi bi-search"></i></button>
+        <div class="col-8 col-md-3 col-lg-3">
+            <label class="form-label small text-muted mb-1">ประเภทไฟล์</label>
+            <select name="type" class="form-select">
+                <option value="">— ทั้งหมด —</option>
+                <option value="pdf"   <?= $f_type === 'pdf'   ? 'selected' : '' ?>>PDF</option>
+                <option value="word"  <?= $f_type === 'word'  ? 'selected' : '' ?>>Word</option>
+                <option value="excel" <?= $f_type === 'excel' ? 'selected' : '' ?>>Excel</option>
+                <option value="ppt"   <?= $f_type === 'ppt'   ? 'selected' : '' ?>>PowerPoint</option>
+                <option value="image" <?= $f_type === 'image' ? 'selected' : '' ?>>รูปภาพ</option>
+            </select>
         </div>
-        <?php if ($q !== ''): ?>
-        <div class="col-12 col-md-1">
+        <div class="col-4 col-md-2 col-lg-1 d-flex gap-1">
+            <button type="submit" class="btn btn-primary flex-grow-1" title="ค้นหา">
+                <i class="bi bi-search"></i>
+            </button>
+            <?php if ($has_filter): ?>
             <a href="<?= $app_url_safe ?>/employee/documents.php"
-               class="btn btn-outline-secondary w-100">ล้าง</a>
+               class="btn btn-outline-secondary flex-grow-1" title="ล้างตัวกรอง">
+                <i class="bi bi-x-lg"></i>
+            </a>
+            <?php endif; ?>
         </div>
-        <?php endif; ?>
     </div>
 </form>
 
@@ -75,7 +105,7 @@ $app_url_safe = htmlspecialchars(APP_URL, ENT_QUOTES, 'UTF-8');
 <div class="card p-5 text-center text-muted">
     <i class="bi bi-folder2-open" style="font-size:48px;opacity:0.3;"></i>
     <p class="mt-2 mb-0">
-        <?= $q !== '' ? 'ไม่พบเอกสารที่ตรงกับการค้นหา' : 'ยังไม่มีเอกสาร' ?>
+        <?= $has_filter ? 'ไม่พบเอกสารที่ตรงกับเงื่อนไขที่เลือก — ลองล้างตัวกรองดู' : 'ยังไม่มีเอกสาร' ?>
     </p>
 </div>
 <?php else: ?>

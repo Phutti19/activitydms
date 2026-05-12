@@ -18,6 +18,30 @@ function generate_default_password(string $username): string {
 $valid_roles = ['admin', 'director', 'employee'];
 $role_label  = ['admin'=>'ผู้ดูแลระบบ', 'director'=>'ผู้อำนวยการ', 'employee'=>'พนักงาน'];
 
+// ประเภทบุคลากร — ค่าปิดตามต้นทางข้อมูล HR (ARIT) — ถ้ามีประเภทใหม่ต้องแก้ที่นี่
+$staff_type_choices = [
+    'พนักงานราชการ',
+    'พนักงานมหาวิทยาลัย',
+    'พนักงานประจำตามสัญญา',
+    'ลูกจ้างประจำ',
+];
+
+// Seed ตำแหน่งพื้นฐานจากข้อมูล HR — รวมกับ distinct ใน DB เพื่อให้มี suggestion ตั้งแต่ระบบเพิ่งติดตั้ง
+$position_seed = [
+    'อาจารย์',
+    'บรรณารักษ์',
+    'บรรณารักษ์ชำนาญการ',
+    'นักวิชาการคอมพิวเตอร์',
+    'นักวิชาการคอมพิวเตอร์ชำนาญการ',
+    'นักวิชาการศึกษาชำนาญการ',
+    'นักวิชาการโสตทัศนศึกษา',
+    'นักวิเทศสัมพันธ์',
+    'นักเอกสารสนเทศชำนาญการ',
+    'เจ้าหน้าที่บริหารงานทั่วไป',
+    'เจ้าหน้าที่บริหารงานทั่วไปชำนาญการ',
+    'พนักงานห้องสมุด',
+];
+
 $dept_stmt = db()->prepare('SELECT id, name FROM departments ORDER BY id');
 $dept_stmt->execute();
 $departments = $dept_stmt->fetchAll();
@@ -31,14 +55,10 @@ $pos_stmt = db()->prepare(
      WHERE position_name <> '' ORDER BY position_name"
 );
 $pos_stmt->execute();
-$position_options = $pos_stmt->fetchAll(PDO::FETCH_COLUMN);
-
-$st_stmt = db()->prepare(
-    "SELECT DISTINCT staff_type FROM users
-     WHERE staff_type <> '' ORDER BY staff_type"
-);
-$st_stmt->execute();
-$staff_type_options = $st_stmt->fetchAll(PDO::FETCH_COLUMN);
+$db_positions = $pos_stmt->fetchAll(PDO::FETCH_COLUMN);
+// รวม seed + ค่าจริงใน DB, unique + sort
+$position_options = array_values(array_unique(array_merge($position_seed, $db_positions)));
+sort($position_options, SORT_FLAG_CASE | SORT_STRING);
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     verify_csrf_or_die();
@@ -69,6 +89,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $errors[] = 'อีเมลไม่ถูกต้อง';
         if (!isset($dept_map[$department_id])) $errors[] = 'แผนกไม่ถูกต้อง';
         if (!in_array($role, $valid_roles, true)) $errors[] = 'บทบาทไม่ถูกต้อง';
+        if ($staff_type !== '' && !in_array($staff_type, $staff_type_choices, true))
+            $errors[] = 'ประเภทบุคลากรไม่ถูกต้อง';
 
         // Self role-change guard (defense in depth)
         if ($action === 'update' && $id === $current_uid && $role !== 'admin') {
@@ -462,14 +484,12 @@ require __DIR__ . '/../includes/header.php';
                         </div>
                         <div class="col-12 col-md-4">
                             <label for="uStaffType" class="form-label small fw-medium">ประเภทบุคลากร</label>
-                            <input type="text" id="uStaffType" name="staff_type" class="form-control"
-                                   list="staffTypeOptions" maxlength="100"
-                                   autocomplete="off" placeholder="เลือกหรือพิมพ์ประเภท">
-                            <datalist id="staffTypeOptions">
-                                <?php foreach ($staff_type_options as $opt): ?>
-                                    <option value="<?= htmlspecialchars((string)$opt, ENT_QUOTES, 'UTF-8') ?>"></option>
+                            <select id="uStaffType" name="staff_type" class="form-select">
+                                <option value="">— เลือกประเภท —</option>
+                                <?php foreach ($staff_type_choices as $opt): ?>
+                                    <option value="<?= htmlspecialchars($opt, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($opt, ENT_QUOTES, 'UTF-8') ?></option>
                                 <?php endforeach; ?>
-                            </datalist>
+                            </select>
                         </div>
 
                         <div class="col-12 col-md-6">

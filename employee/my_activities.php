@@ -7,20 +7,35 @@ require_role('employee');
 $uid = (int) current_user_id();
 $pdo = db();
 
-$q      = trim((string)($_GET['q'] ?? ''));
-$f_status = $_GET['reg_status'] ?? '';
+$q        = trim((string)($_GET['q'] ?? ''));
+$f_status = trim((string)($_GET['reg_status'] ?? ''));
+$f_time   = trim((string)($_GET['time'] ?? ''));
+$f_type   = (int)($_GET['type'] ?? 0);
+$f_fiscal = (int)($_GET['fiscal'] ?? 0);
 
 $where  = ['r.user_id = :uid', 'a.scope = "organization"'];
 $params = [':uid' => $uid];
 
 if ($q !== '') {
-    $where[] = '(a.title LIKE :q OR a.location LIKE :q2)';
+    $where[] = '(a.title LIKE :q OR a.location LIKE :q2 OR a.description LIKE :q3)';
     $params[':q']  = '%' . $q . '%';
     $params[':q2'] = '%' . $q . '%';
+    $params[':q3'] = '%' . $q . '%';
 }
 if (in_array($f_status, ['registered', 'attended', 'absent'], true)) {
     $where[] = 'r.status = :rs';
     $params[':rs'] = $f_status;
+}
+if ($f_time === 'upcoming')  $where[] = 'a.start_datetime > NOW()';
+if ($f_time === 'ongoing')   $where[] = 'a.start_datetime <= NOW() AND a.end_datetime >= NOW()';
+if ($f_time === 'completed') $where[] = 'a.end_datetime < NOW()';
+if ($f_type > 0) {
+    $where[] = 'a.activity_type_id = :ftype';
+    $params[':ftype'] = $f_type;
+}
+if ($f_fiscal > 0) {
+    $where[] = 'a.fiscal_year_id = :ffy';
+    $params[':ffy'] = $f_fiscal;
 }
 
 $stmt = $pdo->prepare(
@@ -35,6 +50,16 @@ $stmt = $pdo->prepare(
 );
 $stmt->execute($params);
 $activities = $stmt->fetchAll();
+
+$types_stmt = $pdo->prepare('SELECT id, name FROM activity_types WHERE is_active = 1 ORDER BY id');
+$types_stmt->execute();
+$types = $types_stmt->fetchAll();
+
+$years_stmt = $pdo->prepare('SELECT id, name FROM fiscal_years ORDER BY start_year DESC');
+$years_stmt->execute();
+$years = $years_stmt->fetchAll();
+
+$has_filter = ($q !== '' || $f_status !== '' || $f_time !== '' || $f_type > 0 || $f_fiscal > 0);
 
 function emp_time_status(array $a): array {
     $now = time();
@@ -67,35 +92,76 @@ require __DIR__ . '/../includes/header.php';
 </div>
 
 <form method="GET" class="card p-3 mb-3">
-    <div class="row g-2">
-        <div class="col-12 col-md-5">
-            <input type="text" name="q" class="form-control" placeholder="ค้นหาชื่อ / สถานที่"
+    <div class="row g-2 align-items-end">
+        <div class="col-12 col-md-6 col-lg-3">
+            <label class="form-label small text-muted mb-1">
+                <i class="bi bi-search"></i> ค้นหา
+            </label>
+            <input type="text" name="q" class="form-control" placeholder="ชื่อ / สถานที่ / รายละเอียด"
                    value="<?= htmlspecialchars($q, ENT_QUOTES, 'UTF-8') ?>">
         </div>
-        <div class="col-8 col-md-4">
-            <select name="reg_status" class="form-select">
-                <option value="">ทุกสถานะ</option>
-                <option value="registered" <?= $f_status==='registered'?'selected':'' ?>>ยืนยันเข้าร่วม</option>
-                <option value="attended"   <?= $f_status==='attended'  ?'selected':'' ?>>เข้าร่วมแล้ว</option>
-                <option value="absent"     <?= $f_status==='absent'    ?'selected':'' ?>>ไม่เข้าร่วม</option>
+        <div class="col-6 col-md-3 col-lg-2">
+            <label class="form-label small text-muted mb-1">ประเภท</label>
+            <select name="type" class="form-select">
+                <option value="0">— ทั้งหมด —</option>
+                <?php foreach ($types as $t): ?>
+                <option value="<?= (int)$t['id'] ?>" <?= $f_type === (int)$t['id'] ? 'selected' : '' ?>>
+                    <?= htmlspecialchars($t['name'], ENT_QUOTES, 'UTF-8') ?>
+                </option>
+                <?php endforeach; ?>
             </select>
         </div>
-        <div class="col-4 col-md-2">
-            <button type="submit" class="btn btn-outline-primary w-100"><i class="bi bi-search"></i></button>
+        <div class="col-6 col-md-3 col-lg-2">
+            <label class="form-label small text-muted mb-1">ปีงบประมาณ</label>
+            <select name="fiscal" class="form-select">
+                <option value="0">— ทั้งหมด —</option>
+                <?php foreach ($years as $y): ?>
+                <option value="<?= (int)$y['id'] ?>" <?= $f_fiscal === (int)$y['id'] ? 'selected' : '' ?>>
+                    <?= htmlspecialchars($y['name'], ENT_QUOTES, 'UTF-8') ?>
+                </option>
+                <?php endforeach; ?>
+            </select>
         </div>
-        <?php if ($q !== '' || $f_status !== ''): ?>
-        <div class="col-12 col-md-1">
+        <div class="col-6 col-md-3 col-lg-2">
+            <label class="form-label small text-muted mb-1">ช่วงเวลา</label>
+            <select name="time" class="form-select">
+                <option value="">— ทั้งหมด —</option>
+                <option value="upcoming"  <?= $f_time==='upcoming'  ? 'selected' : '' ?>>กำลังจะมาถึง</option>
+                <option value="ongoing"   <?= $f_time==='ongoing'   ? 'selected' : '' ?>>กำลังดำเนินอยู่</option>
+                <option value="completed" <?= $f_time==='completed' ? 'selected' : '' ?>>เสร็จสิ้น</option>
+            </select>
+        </div>
+        <div class="col-6 col-md-3 col-lg-2">
+            <label class="form-label small text-muted mb-1">การเข้าร่วม</label>
+            <select name="reg_status" class="form-select">
+                <option value="">— ทั้งหมด —</option>
+                <option value="registered" <?= $f_status==='registered' ? 'selected' : '' ?>>ยืนยันเข้าร่วม</option>
+                <option value="attended"   <?= $f_status==='attended'   ? 'selected' : '' ?>>เข้าร่วมแล้ว</option>
+                <option value="absent"     <?= $f_status==='absent'     ? 'selected' : '' ?>>ไม่เข้าร่วม</option>
+            </select>
+        </div>
+        <div class="col-12 col-lg-1 d-flex gap-1">
+            <button type="submit" class="btn btn-primary flex-grow-1" title="ค้นหา">
+                <i class="bi bi-search"></i>
+            </button>
+            <?php if ($has_filter): ?>
             <a href="<?= htmlspecialchars(APP_URL, ENT_QUOTES, 'UTF-8') ?>/employee/my_activities.php"
-               class="btn btn-outline-secondary w-100">ล้าง</a>
+               class="btn btn-outline-secondary flex-grow-1" title="ล้างตัวกรอง">
+                <i class="bi bi-x-lg"></i>
+            </a>
+            <?php endif; ?>
         </div>
-        <?php endif; ?>
     </div>
 </form>
 
 <?php if (empty($activities)): ?>
 <div class="card p-5 text-center text-muted">
     <i class="bi bi-person-check" style="font-size:48px;opacity:0.3;"></i>
+    <?php if ($has_filter): ?>
+    <p class="mt-2 mb-0">ไม่พบกิจกรรมที่ตรงกับเงื่อนไขที่เลือก — ลองล้างตัวกรองดู</p>
+    <?php else: ?>
     <p class="mt-2 mb-0">ยังไม่มีกิจกรรมที่ได้รับมอบหมาย</p>
+    <?php endif; ?>
 </div>
 <?php else: ?>
 <div class="row g-3">

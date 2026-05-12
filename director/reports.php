@@ -130,15 +130,48 @@ function dir_rpt_ym_th(string $ym): string {
     return $months[(int)$m] . ' ' . ((int)$y + 543);
 }
 
+// Filter summary for PDF header
+$filter_parts = [];
+if ($f_fiscal > 0) {
+    foreach ($years as $y) {
+        if ((int)$y['id'] === $f_fiscal) { $filter_parts[] = 'ปีงบประมาณ: ' . $y['name']; break; }
+    }
+}
+if ($f_type > 0) {
+    foreach ($types as $t) {
+        if ((int)$t['id'] === $f_type) { $filter_parts[] = 'ประเภท: ' . $t['name']; break; }
+    }
+}
+$time_label = ['upcoming'=>'กำลังจะมาถึง','ongoing'=>'กำลังดำเนินอยู่','completed'=>'เสร็จสิ้น'][$f_time] ?? '';
+if ($time_label !== '') $filter_parts[] = 'สถานะ: ' . $time_label;
+$filter_summary = empty($filter_parts) ? 'ทั้งหมด' : implode(' · ', $filter_parts);
+
+$gen_dt = dir_rpt_fmt(date('Y-m-d H:i:s')) . ' เวลา ' . date('H:i') . ' น.';
+
 $page_title  = 'รายงานสรุป';
 $page_active = 'reports';
 require __DIR__ . '/../includes/header.php';
 $app_url_safe = htmlspecialchars(APP_URL, ENT_QUOTES, 'UTF-8');
 ?>
 
-<div class="page-header">
-    <h1 class="page-title">รายงานสรุปกิจกรรม</h1>
-    <span class="badge bg-secondary ms-2">อ่านอย่างเดียว</span>
+<div class="page-header d-flex flex-wrap align-items-center justify-content-between gap-2">
+    <div class="d-flex align-items-center gap-2">
+        <h1 class="page-title mb-0">รายงานสรุปกิจกรรม</h1>
+        <span class="badge bg-secondary d-print-none">อ่านอย่างเดียว</span>
+    </div>
+    <button type="button" class="btn btn-outline-primary d-print-none" onclick="window.print()">
+        <i class="bi bi-file-earmark-pdf me-1"></i>ส่งออก PDF
+    </button>
+</div>
+
+<!-- Print-only header -->
+<div class="print-only print-header">
+    <div class="org-name">สำนักวิทยบริการและเทคโนโลยีสารสนเทศ (ARIT)</div>
+    <div class="report-title">รายงานสรุปกิจกรรม</div>
+    <div class="meta">
+        ตัวกรอง: <?= htmlspecialchars($filter_summary, ENT_QUOTES, 'UTF-8') ?>
+        <br>วันที่ออกรายงาน: <?= htmlspecialchars($gen_dt, ENT_QUOTES, 'UTF-8') ?>
+    </div>
 </div>
 
 <!-- Filters -->
@@ -192,7 +225,7 @@ $app_url_safe = htmlspecialchars(APP_URL, ENT_QUOTES, 'UTF-8');
 </form>
 
 <!-- Summary cards -->
-<div class="row g-3 mb-4">
+<div class="row g-3 mb-4 summary-print-grid">
     <div class="col-6 col-lg-3">
         <div class="card text-center p-3">
             <div class="fs-2 fw-bold text-primary"><?= number_format($total_activities) ?></div>

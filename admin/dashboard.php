@@ -23,19 +23,26 @@ $ta = $pdo->prepare(
 $ta->execute($fy_params);
 $total_activities = (int)$ta->fetchColumn();
 
-// เข้าร่วม
+// เข้าร่วม + breakdown
 $reg = $pdo->prepare(
     'SELECT COUNT(*) AS reg_total,
-            SUM(r.status = "attended") AS attended
+            SUM(r.status = "attended")   AS attended,
+            SUM(r.status = "absent")     AS absent,
+            SUM(r.status = "registered") AS registered
      FROM activity_registrations r
      JOIN activities a ON a.id = r.activity_id
      WHERE a.scope = "organization" ' . $fy_clause
 );
 $reg->execute($fy_params);
 $reg_row = $reg->fetch();
-$total_reg      = (int)($reg_row['reg_total'] ?? 0);
-$total_attended = (int)($reg_row['attended'] ?? 0);
-$attend_rate    = $total_reg > 0 ? round(($total_attended / $total_reg) * 100, 1) : 0;
+$total_reg        = (int)($reg_row['reg_total'] ?? 0);
+$total_attended   = (int)($reg_row['attended']  ?? 0);
+$total_absent     = (int)($reg_row['absent']    ?? 0);
+$total_registered = (int)($reg_row['registered']?? 0);
+
+// อัตราเข้าร่วม = attended / (attended + absent) — ไม่นับ registered ที่ยังไม่ถึงเวลา
+$rate_base   = $total_attended + $total_absent;
+$attend_rate = $rate_base > 0 ? (int) round(($total_attended / $rate_base) * 100) : 0;
 
 // เกียรติบัตร
 $tc = $pdo->prepare(
@@ -67,6 +74,15 @@ $eq = $pdo->prepare(
 );
 $eq->execute();
 $email_stats = $eq->fetch();
+
+// กิจกรรมวันนี้
+$td_stmt = $pdo->prepare(
+    "SELECT COUNT(*) FROM activities
+     WHERE scope = 'organization'
+       AND DATE(start_datetime) = CURDATE()"
+);
+$td_stmt->execute();
+$today_count = (int)$td_stmt->fetchColumn();
 
 // กิจกรรมที่กำลังจะมา (5 รายการ)
 $upcoming_stmt = $pdo->prepare(
@@ -105,227 +121,193 @@ function admin_dash_fmt(string $dt): string {
     $m  = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
     return date('j', $ts) . ' ' . $m[(int)date('n', $ts)-1] . ' ' . (date('Y', $ts)+543) . ' ' . date('H:i', $ts);
 }
+function admin_dash_relative(string $dt): string {
+    $diff = time() - strtotime($dt);
+    if ($diff < 60)        return 'เมื่อสักครู่';
+    if ($diff < 3600)      return (int)floor($diff/60)    . ' นาทีก่อน';
+    if ($diff < 86400)     return (int)floor($diff/3600)  . ' ชั่วโมงก่อน';
+    if ($diff < 86400 * 7) return (int)floor($diff/86400) . ' วันก่อน';
+    $ts = strtotime($dt);
+    $m  = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+    return date('j', $ts) . ' ' . $m[(int)date('n', $ts)-1];
+}
 
 $page_title  = 'หน้าหลัก';
 $page_active = 'dashboard';
 require __DIR__ . '/../includes/header.php';
 $app_url_safe = htmlspecialchars(APP_URL, ENT_QUOTES, 'UTF-8');
+
+$thai_months = ['','ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+$thai_days   = ['อา','จ','อ','พ','พฤ','ศ','ส'];
+$today_label = $thai_days[(int)date('w')] . ' ' . date('j') . ' ' . $thai_months[(int)date('n')] . ' ' . ((int)date('Y') + 543);
 ?>
 
-<style>
-/* โทนเข็มพาสเทล — สีหลังพื้นไม่สว่างจ้า */
-.dash-stat-card {
-    background: #E8EEF6;
-    border: 1px solid #93A3BB;
-    border-left: 5px solid var(--stat-color, #185FA5);
-    box-shadow: 0 2px 6px rgba(15, 23, 42, .12);
-}
-.dash-stat-card .icon-wrap {
-    width: 48px; height: 48px;
-    border-radius: 10px;
-    background: var(--stat-color, #185FA5);
-    color: #FFFFFF;
-    display: inline-flex; align-items: center; justify-content: center;
-    box-shadow: 0 4px 10px rgba(15, 23, 42, .15);
-}
-.dash-stat-card .icon-wrap i { font-size: 22px; line-height: 1; }
-.dash-stat-num {
-    color: #0F172A;
-    font-weight: 700;
-    font-size: 1.85rem;
-    line-height: 1.1;
-}
-.dash-stat-label {
-    color: #334155;
-    font-size: .9rem;
-    font-weight: 500;
-}
-.dash-stat-sub {
-    color: #475569;
-    font-size: .8rem;
-}
-.dash-mini-card {
-    background: #E8EEF6;
-    border: 1px solid #93A3BB;
-    color: #0F172A;
-    box-shadow: 0 2px 6px rgba(15, 23, 42, .10);
-}
-.dash-mini-card .mini-label {
-    color: #334155;
-    font-weight: 500;
-    font-size: .85rem;
-}
-.dash-mini-card .mini-num {
-    color: #0F172A;
-    font-weight: 700;
-}
-.dash-card-header {
-    background: #1E293B;
-    color: #F1F5F9;
-    font-weight: 600;
-    border-bottom: 1px solid #0F172A;
-}
-.dash-card-header .btn-outline-primary {
-    color: #F1F5F9;
-    border-color: #94A3B8;
-    background: transparent;
-}
-.dash-card-header .btn-outline-primary:hover {
-    color: #0F172A;
-    background: #F1F5F9;
-    border-color: #F1F5F9;
-}
-.dash-list .list-group-item {
-    color: #0F172A;
-    background: #E8EEF6;
-    border-color: rgba(148, 163, 184, 0.45);
-}
-.dash-list .list-group-item + .list-group-item {
-    border-top-color: rgba(148, 163, 184, 0.45);
-}
-.dash-list .list-group-item .text-muted {
-    color: #334155 !important;
-}
-.dash-list .item-title {
-    color: #0F172A;
-    font-weight: 600;
-}
-.dash-list .item-title:hover {
-    color: #185FA5;
-    text-decoration: underline;
-}
-.dash-quick-link {
-    background: #1E293B;
-    color: #F1F5F9 !important;
-    padding: 6px 12px;
-    border-radius: 999px;
-    font-size: .8rem;
-    font-weight: 500;
-    text-decoration: none;
-    display: inline-flex; align-items: center; gap: 6px;
-}
-.dash-quick-link:hover {
-    background: #0F172A;
-    color: #FFFFFF !important;
-}
-.dash-quick-link.accent { background: #185FA5; }
-.dash-quick-link.accent:hover { background: #0F4475; }
-.dash-quick-link.muted { background: #475569; }
-.dash-quick-link.muted:hover { background: #334155; }
-</style>
-
-<div class="page-header">
-    <div>
-        <h1 class="page-title">หน้าหลัก Admin</h1>
-        <div class="text-muted small">
-            สวัสดี <strong class="text-dark"><?= htmlspecialchars($_SESSION['display_name'] ?? '', ENT_QUOTES, 'UTF-8') ?></strong>
-            · ปีงบประมาณ <span class="fw-semibold text-dark"><?= htmlspecialchars($fy_name, ENT_QUOTES, 'UTF-8') ?></span>
+<!-- Hero greeting -->
+<div class="card mb-4 border-0 text-white"
+     style="background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%);">
+    <div class="card-body p-4">
+        <div class="row align-items-center g-3">
+            <div class="col-12 col-md-8">
+                <div class="small opacity-75 mb-1">
+                    <i class="bi bi-calendar3 me-1"></i><?= htmlspecialchars($today_label, ENT_QUOTES, 'UTF-8') ?>
+                    · ปีงบประมาณ <?= htmlspecialchars($fy_name, ENT_QUOTES, 'UTF-8') ?>
+                </div>
+                <h1 class="h3 fw-bold mb-2">
+                    สวัสดี, <?= htmlspecialchars($_SESSION['display_name'] ?? '', ENT_QUOTES, 'UTF-8') ?>
+                </h1>
+                <p class="mb-0 opacity-90">
+                    <?php if ($today_count > 0): ?>
+                        <i class="bi bi-bell-fill me-1"></i>
+                        วันนี้มี <strong><?= $today_count ?></strong> กิจกรรมองค์กร
+                    <?php else: ?>
+                        <i class="bi bi-cup-hot me-1"></i>
+                        วันนี้ไม่มีกิจกรรมองค์กร
+                    <?php endif; ?>
+                </p>
+            </div>
+            <div class="col-12 col-md-4 text-md-end">
+                <a href="<?= $app_url_safe ?>/admin/activity_form.php?action=create"
+                   class="btn btn-light fw-semibold">
+                    <i class="bi bi-plus-lg me-1"></i>เพิ่มกิจกรรม
+                </a>
+            </div>
         </div>
     </div>
-    <a href="<?= $app_url_safe ?>/admin/activity_form.php?action=create" class="btn btn-primary">
-        <i class="bi bi-plus-lg me-1"></i>เพิ่มกิจกรรม
-    </a>
 </div>
 
 <!-- Stat cards -->
 <div class="row g-3 mb-4">
-    <div class="col-6 col-lg-3">
-        <a href="<?= $app_url_safe ?>/admin/manage_activities.php" class="text-decoration-none">
-            <div class="card dash-stat-card p-3 h-100" style="--stat-color:#185FA5;">
-                <div class="d-flex align-items-center justify-content-between gap-2">
-                    <div>
-                        <div class="dash-stat-num"><?= number_format($total_activities) ?></div>
-                        <div class="dash-stat-label">กิจกรรมองค์กร</div>
-                    </div>
-                    <span class="icon-wrap"><i class="bi bi-calendar-event"></i></span>
-                </div>
+    <div class="col-6 col-md-3">
+        <a href="<?= $app_url_safe ?>/admin/manage_activities.php" class="text-decoration-none text-reset">
+            <div class="card card-hover text-center p-3 h-100">
+                <div class="text-primary mb-1"><i class="bi bi-calendar-event fs-3"></i></div>
+                <div class="fs-3 fw-bold text-primary"><?= number_format($total_activities) ?></div>
+                <div class="small text-muted">กิจกรรมองค์กร</div>
             </div>
         </a>
     </div>
-    <div class="col-6 col-lg-3">
-        <div class="card dash-stat-card p-3 h-100" style="--stat-color:#0F6E56;">
-            <div class="d-flex align-items-center justify-content-between gap-2">
-                <div>
-                    <div class="dash-stat-num"><?= number_format($total_reg) ?></div>
-                    <div class="dash-stat-label">รายการเข้าร่วม</div>
-                </div>
-                <span class="icon-wrap"><i class="bi bi-people"></i></span>
+    <div class="col-6 col-md-3">
+        <div class="card text-center p-3 h-100">
+            <div class="text-info mb-1"><i class="bi bi-people fs-3"></i></div>
+            <div class="fs-3 fw-bold text-info"><?= number_format($total_reg) ?></div>
+            <div class="small text-muted">รายการเข้าร่วม</div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="card text-center p-3 h-100">
+            <div class="text-success mb-1"><i class="bi bi-check2-circle fs-3"></i></div>
+            <div class="fs-3 fw-bold text-success"><?= $attend_rate ?>%</div>
+            <div class="small text-muted">
+                อัตราเข้าร่วม
+                <?php if ($rate_base > 0): ?>
+                    <span class="d-block">(<?= $total_attended ?>/<?= $rate_base ?>)</span>
+                <?php else: ?>
+                    <span class="d-block">— ยังไม่มีข้อมูล</span>
+                <?php endif; ?>
             </div>
         </div>
     </div>
-    <div class="col-6 col-lg-3">
-        <div class="card dash-stat-card p-3 h-100" style="--stat-color:#B45309;">
-            <div class="d-flex align-items-center justify-content-between gap-2">
-                <div>
-                    <div class="dash-stat-num"><?= $attend_rate ?>%</div>
-                    <div class="dash-stat-label">อัตราเข้าร่วม</div>
-                    <div class="dash-stat-sub"><?= $total_attended ?>/<?= $total_reg ?></div>
-                </div>
-                <span class="icon-wrap"><i class="bi bi-check2-circle"></i></span>
-            </div>
-        </div>
-    </div>
-    <div class="col-6 col-lg-3">
-        <a href="<?= $app_url_safe ?>/admin/manage_certificates.php" class="text-decoration-none">
-            <div class="card dash-stat-card p-3 h-100" style="--stat-color:#993C1D;">
-                <div class="d-flex align-items-center justify-content-between gap-2">
-                    <div>
-                        <div class="dash-stat-num"><?= number_format($total_certs) ?></div>
-                        <div class="dash-stat-label">เกียรติบัตรที่ออก</div>
-                    </div>
-                    <span class="icon-wrap"><i class="bi bi-award"></i></span>
-                </div>
+    <div class="col-6 col-md-3">
+        <a href="<?= $app_url_safe ?>/admin/manage_certificates.php" class="text-decoration-none text-reset">
+            <div class="card card-hover text-center p-3 h-100">
+                <div class="text-warning mb-1"><i class="bi bi-award fs-3"></i></div>
+                <div class="fs-3 fw-bold text-warning"><?= number_format($total_certs) ?></div>
+                <div class="small text-muted">เกียรติบัตรที่ออก</div>
             </div>
         </a>
     </div>
 </div>
 
-<!-- Secondary stats -->
+<!-- Chart + ทางลัด -->
 <div class="row g-3 mb-4">
-    <div class="col-6 col-md-4">
-        <a href="<?= $app_url_safe ?>/admin/manage_users.php" class="text-decoration-none">
-            <div class="card dash-mini-card p-3 h-100">
-                <div class="mini-label mb-1">บัญชีทั้งหมด (active)</div>
-                <div class="d-flex align-items-baseline gap-2 flex-wrap">
-                    <span class="fs-4 mini-num"><?= (int)($user_stats['total_users'] ?? 0) ?></span>
-                    <span class="small dash-stat-sub">
-                        <?= (int)($user_stats['employees'] ?? 0) ?> พนักงาน ·
-                        <?= (int)($user_stats['admins'] ?? 0) ?> admin ·
-                        <?= (int)($user_stats['directors'] ?? 0) ?> director
-                    </span>
+    <?php if ($total_reg > 0): ?>
+    <div class="col-12 col-lg-7">
+        <div class="card h-100">
+            <div class="card-header fw-semibold">
+                <i class="bi bi-pie-chart me-1"></i>สรุปสถานะการเข้าร่วม (ปีงบ <?= htmlspecialchars($fy_name, ENT_QUOTES, 'UTF-8') ?>)
+            </div>
+            <div class="card-body">
+                <div class="row g-3 align-items-center">
+                    <div class="col-12 col-md-5">
+                        <div style="max-width: 220px; margin: 0 auto;">
+                            <canvas id="statusChart"></canvas>
+                        </div>
+                    </div>
+                    <div class="col-12 col-md-7">
+                        <ul class="list-unstyled mb-0">
+                            <li class="d-flex justify-content-between align-items-center py-2 border-bottom">
+                                <span><span class="d-inline-block rounded-circle me-2" style="width:.75rem;height:.75rem;background:#198754;"></span>เข้าร่วมแล้ว</span>
+                                <strong><?= $total_attended ?></strong>
+                            </li>
+                            <li class="d-flex justify-content-between align-items-center py-2 border-bottom">
+                                <span><span class="d-inline-block rounded-circle me-2" style="width:.75rem;height:.75rem;background:#dc3545;"></span>ไม่เข้าร่วม</span>
+                                <strong><?= $total_absent ?></strong>
+                            </li>
+                            <li class="d-flex justify-content-between align-items-center py-2">
+                                <span><span class="d-inline-block rounded-circle me-2" style="width:.75rem;height:.75rem;background:#6c757d;"></span>ยืนยันเข้าร่วม (รอ)</span>
+                                <strong><?= $total_registered ?></strong>
+                            </li>
+                        </ul>
+                    </div>
                 </div>
             </div>
-        </a>
+        </div>
     </div>
-    <div class="col-6 col-md-4">
-        <a href="<?= $app_url_safe ?>/admin/notification_settings.php" class="text-decoration-none">
-            <div class="card dash-mini-card p-3 h-100">
-                <div class="mini-label mb-1">คิวอีเมล</div>
-                <div class="d-flex align-items-baseline gap-2 flex-wrap">
-                    <span class="fs-4 mini-num"><?= (int)($email_stats['pending'] ?? 0) ?></span>
-                    <span class="small dash-stat-sub">รอส่ง</span>
-                    <?php if ((int)($email_stats['failed'] ?? 0) > 0): ?>
-                    <span class="small fw-semibold" style="color:#B91C1C;">
-                        · <?= (int)$email_stats['failed'] ?> ล้มเหลว
-                    </span>
-                    <?php endif; ?>
-                </div>
+    <?php endif; ?>
+
+    <div class="col-12 <?= $total_reg > 0 ? 'col-lg-5' : '' ?>">
+        <div class="row g-3 h-100">
+            <div class="col-6">
+                <a href="<?= $app_url_safe ?>/admin/manage_users.php" class="text-decoration-none text-reset">
+                    <div class="card card-hover p-3 h-100">
+                        <div class="small text-muted mb-1">
+                            <i class="bi bi-person-badge me-1"></i>บัญชีทั้งหมด
+                        </div>
+                        <div class="fs-4 fw-bold"><?= (int)($user_stats['total_users'] ?? 0) ?></div>
+                        <div class="small text-muted">
+                            <?= (int)($user_stats['employees'] ?? 0) ?> พนักงาน ·
+                            <?= (int)($user_stats['admins'] ?? 0) ?> admin ·
+                            <?= (int)($user_stats['directors'] ?? 0) ?> director
+                        </div>
+                    </div>
+                </a>
             </div>
-        </a>
-    </div>
-    <div class="col-12 col-md-4">
-        <div class="card dash-mini-card p-3 h-100">
-            <div class="mini-label mb-2">ทางลัด</div>
-            <div class="d-flex flex-wrap gap-2">
-                <a href="<?= $app_url_safe ?>/admin/calendar.php" class="dash-quick-link accent">
-                    <i class="bi bi-calendar3"></i>ปฏิทิน
+            <div class="col-6">
+                <a href="<?= $app_url_safe ?>/admin/notification_settings.php" class="text-decoration-none text-reset">
+                    <div class="card card-hover p-3 h-100">
+                        <div class="small text-muted mb-1">
+                            <i class="bi bi-envelope me-1"></i>คิวอีเมล
+                        </div>
+                        <div class="fs-4 fw-bold"><?= (int)($email_stats['pending'] ?? 0) ?>
+                            <span class="small text-muted fw-normal">รอส่ง</span>
+                        </div>
+                        <?php if ((int)($email_stats['failed'] ?? 0) > 0): ?>
+                        <div class="small text-danger fw-semibold">
+                            <i class="bi bi-exclamation-triangle me-1"></i><?= (int)$email_stats['failed'] ?> ล้มเหลว
+                        </div>
+                        <?php else: ?>
+                        <div class="small text-muted">ไม่มีรายการล้มเหลว</div>
+                        <?php endif; ?>
+                    </div>
                 </a>
-                <a href="<?= $app_url_safe ?>/admin/reports.php" class="dash-quick-link">
-                    <i class="bi bi-graph-up"></i>รายงาน
-                </a>
-                <a href="<?= $app_url_safe ?>/admin/manage_documents.php" class="dash-quick-link muted">
-                    <i class="bi bi-folder"></i>เอกสาร
-                </a>
+            </div>
+            <div class="col-12">
+                <div class="card p-3 h-100">
+                    <div class="small text-muted mb-2">
+                        <i class="bi bi-lightning-charge me-1"></i>ทางลัด
+                    </div>
+                    <div class="d-flex flex-wrap gap-2">
+                        <a href="<?= $app_url_safe ?>/admin/calendar.php" class="btn btn-sm btn-primary">
+                            <i class="bi bi-calendar3 me-1"></i>ปฏิทิน
+                        </a>
+                        <a href="<?= $app_url_safe ?>/admin/reports.php" class="btn btn-sm btn-outline-secondary">
+                            <i class="bi bi-graph-up me-1"></i>รายงาน
+                        </a>
+                        <a href="<?= $app_url_safe ?>/admin/manage_documents.php" class="btn btn-sm btn-outline-secondary">
+                            <i class="bi bi-folder me-1"></i>เอกสาร
+                        </a>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -334,52 +316,50 @@ $app_url_safe = htmlspecialchars(APP_URL, ENT_QUOTES, 'UTF-8');
 <div class="row g-3">
     <!-- Upcoming activities -->
     <div class="col-12 col-lg-7">
-        <div class="card h-100 dash-list">
-            <div class="card-header dash-card-header d-flex justify-content-between align-items-center">
-                <span>
+        <div class="card h-100">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span class="fw-semibold">
                     <i class="bi bi-calendar-event me-1"></i>กิจกรรมที่กำลังจะมาถึง
                 </span>
                 <a href="<?= $app_url_safe ?>/admin/manage_activities.php"
                    class="btn btn-sm btn-outline-primary">ดูทั้งหมด</a>
             </div>
             <?php if (empty($upcoming)): ?>
-            <div class="p-4 text-center text-muted">ยังไม่มีกิจกรรมที่กำลังจะมาถึง</div>
+            <div class="p-4 text-center text-muted small">
+                <i class="bi bi-calendar-x fs-3 d-block mb-2"></i>
+                ยังไม่มีกิจกรรมที่กำลังจะมาถึง
+            </div>
             <?php else: ?>
             <ul class="list-group list-group-flush">
                 <?php foreach ($upcoming as $a):
                     $color = preg_match('/^#[0-9a-fA-F]{6}$/', (string)$a['type_color']) ? $a['type_color'] : '#185FA5';
-                    $is_ongoing = strtotime($a['start_datetime']) <= time();
+                    $is_ongoing = strtotime($a['start_datetime']) <= time() && strtotime($a['end_datetime']) >= time();
                 ?>
-                <li class="list-group-item px-3 py-3">
-                    <div class="d-flex align-items-start gap-2">
-                        <div class="flex-shrink-0 mt-1"
-                             style="width:10px;height:10px;border-radius:50%;background:<?= htmlspecialchars($color, ENT_QUOTES, 'UTF-8') ?>;"></div>
-                        <div class="flex-grow-1 min-w-0">
-                            <a href="<?= $app_url_safe ?>/admin/activity_view.php?id=<?= (int)$a['id'] ?>"
-                               class="item-title text-decoration-none text-truncate d-block">
-                                <?= htmlspecialchars($a['title'], ENT_QUOTES, 'UTF-8') ?>
-                            </a>
-                            <div class="small text-muted mt-1">
-                                <i class="bi bi-clock me-1"></i>
-                                <?= htmlspecialchars(admin_dash_fmt($a['start_datetime']), ENT_QUOTES, 'UTF-8') ?>
-                                <?php if (!empty($a['location'])): ?>
-                                · <i class="bi bi-geo-alt"></i>
-                                <?= htmlspecialchars($a['location'], ENT_QUOTES, 'UTF-8') ?>
-                                <?php endif; ?>
-                            </div>
-                        </div>
-                        <div class="flex-shrink-0 text-end">
-                            <?php if ($is_ongoing): ?>
-                            <span class="badge bg-success">กำลังดำเนินอยู่</span>
-                            <?php else: ?>
-                            <span class="badge bg-secondary"><?= (int)$a['reg_count'] ?> คน</span>
-                            <?php endif; ?>
-                            <?php if ((int)$a['is_open_registration'] === 1): ?>
-                            <div class="small mt-1">
-                                <span class="badge bg-info">เปิดให้เข้าร่วม</span>
-                            </div>
+                <li class="list-group-item d-flex align-items-center gap-3 py-3">
+                    <div style="width:4px;height:40px;background:<?= htmlspecialchars($color, ENT_QUOTES, 'UTF-8') ?>;border-radius:2px;flex-shrink:0;"></div>
+                    <div class="flex-grow-1 overflow-hidden">
+                        <a href="<?= $app_url_safe ?>/admin/activity_view.php?id=<?= (int)$a['id'] ?>"
+                           class="fw-medium text-decoration-none text-truncate d-block">
+                            <?= htmlspecialchars($a['title'], ENT_QUOTES, 'UTF-8') ?>
+                        </a>
+                        <div class="small text-muted">
+                            <i class="bi bi-clock me-1"></i><?= htmlspecialchars(admin_dash_fmt($a['start_datetime']), ENT_QUOTES, 'UTF-8') ?>
+                            <?php if (!empty($a['location'])): ?>
+                            · <i class="bi bi-geo-alt me-1"></i><?= htmlspecialchars($a['location'], ENT_QUOTES, 'UTF-8') ?>
                             <?php endif; ?>
                         </div>
+                    </div>
+                    <div class="text-end flex-shrink-0">
+                        <?php if ($is_ongoing): ?>
+                        <span class="badge" style="background:#FEF3C7;color:#92400E;">กำลังดำเนินอยู่</span>
+                        <?php else: ?>
+                        <span class="badge bg-secondary"><?= (int)$a['reg_count'] ?> คน</span>
+                        <?php endif; ?>
+                        <?php if ((int)$a['is_open_registration'] === 1): ?>
+                        <div class="small mt-1">
+                            <span class="badge bg-info">เปิดรับสมัคร</span>
+                        </div>
+                        <?php endif; ?>
                     </div>
                 </li>
                 <?php endforeach; ?>
@@ -390,30 +370,34 @@ $app_url_safe = htmlspecialchars(APP_URL, ENT_QUOTES, 'UTF-8');
 
     <!-- Recent activities -->
     <div class="col-12 col-lg-5">
-        <div class="card h-100 dash-list">
-            <div class="card-header dash-card-header">
+        <div class="card h-100">
+            <div class="card-header fw-semibold">
                 <i class="bi bi-clock-history me-1"></i>กิจกรรมที่เพิ่งสร้าง
             </div>
             <?php if (empty($recent)): ?>
-            <div class="p-4 text-center text-muted">ยังไม่มีกิจกรรม</div>
+            <div class="p-4 text-center text-muted small">
+                <i class="bi bi-inbox fs-3 d-block mb-2"></i>
+                ยังไม่มีกิจกรรม
+            </div>
             <?php else: ?>
             <ul class="list-group list-group-flush">
                 <?php foreach ($recent as $a):
                     $color = preg_match('/^#[0-9a-fA-F]{6}$/', (string)$a['type_color']) ? $a['type_color'] : '#185FA5';
                 ?>
-                <li class="list-group-item px-3 py-3">
+                <li class="list-group-item py-3">
                     <div class="d-flex align-items-start gap-2">
-                        <span class="badge"
+                        <span class="badge flex-shrink-0"
                               style="background:<?= htmlspecialchars($color, ENT_QUOTES, 'UTF-8') ?>;">
                             <?= htmlspecialchars($a['type_name'] ?? '—', ENT_QUOTES, 'UTF-8') ?>
                         </span>
-                        <div class="flex-grow-1 min-w-0">
+                        <div class="flex-grow-1 overflow-hidden">
                             <a href="<?= $app_url_safe ?>/admin/activity_view.php?id=<?= (int)$a['id'] ?>"
-                               class="item-title text-decoration-none text-truncate d-block">
+                               class="fw-medium text-decoration-none text-truncate d-block">
                                 <?= htmlspecialchars($a['title'], ENT_QUOTES, 'UTF-8') ?>
                             </a>
                             <div class="small text-muted mt-1">
-                                โดย <?= htmlspecialchars($a['creator_name'] ?? '—', ENT_QUOTES, 'UTF-8') ?>
+                                <i class="bi bi-person me-1"></i><?= htmlspecialchars($a['creator_name'] ?? '—', ENT_QUOTES, 'UTF-8') ?>
+                                · <?= htmlspecialchars(admin_dash_relative($a['created_at']), ENT_QUOTES, 'UTF-8') ?>
                             </div>
                         </div>
                     </div>
@@ -424,5 +408,40 @@ $app_url_safe = htmlspecialchars(APP_URL, ENT_QUOTES, 'UTF-8');
         </div>
     </div>
 </div>
+
+<?php if ($total_reg > 0): ?>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script>
+(function () {
+    const ctx = document.getElementById('statusChart');
+    if (!ctx || typeof Chart === 'undefined') return;
+    Chart.defaults.font.family = "'Kanit', system-ui, sans-serif";
+    new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: ['เข้าร่วมแล้ว', 'ไม่เข้าร่วม', 'ยืนยันเข้าร่วม'],
+            datasets: [{
+                data: [<?= $total_attended ?>, <?= $total_absent ?>, <?= $total_registered ?>],
+                backgroundColor: ['#198754', '#dc3545', '#6c757d'],
+                borderWidth: 2
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            cutout: '65%',
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    callbacks: {
+                        label: (c) => ' ' + c.label + ': ' + c.parsed
+                    }
+                }
+            }
+        }
+    });
+})();
+</script>
+<?php endif; ?>
 
 <?php require __DIR__ . '/../includes/footer.php'; ?>

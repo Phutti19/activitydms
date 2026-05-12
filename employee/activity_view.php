@@ -36,7 +36,7 @@ if (!$activity) {
 
 // ตรวจสิทธิ์: ต้องเข้าร่วมอยู่แล้ว หรือ กิจกรรมเปิดให้เข้าร่วม
 $reg_check = $pdo->prepare(
-    'SELECT id, status FROM activity_registrations
+    'SELECT id, status, checked_by FROM activity_registrations
      WHERE activity_id = :a AND user_id = :u LIMIT 1'
 );
 $reg_check->execute([':a' => $id, ':u' => $uid]);
@@ -64,7 +64,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 try {
                     $pdo->prepare(
                         'INSERT INTO activity_registrations (activity_id, user_id, status)
-                         VALUES (:a, :u, "registered")'
+                         VALUES (:a, :u, "attended")'
                     )->execute([':a' => $id, ':u' => $uid]);
                     flash_set('success', 'เข้าร่วมกิจกรรมสำเร็จ');
                 } catch (PDOException $e) {
@@ -74,10 +74,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
     } elseif ($action === 'unregister') {
-        if ($my_reg && (string)$my_reg['status'] === 'registered') {
+        if ($my_reg && $my_reg['checked_by'] === null) {
             $pdo->prepare(
                 'DELETE FROM activity_registrations
-                 WHERE activity_id = :a AND user_id = :u AND status = "registered" LIMIT 1'
+                 WHERE activity_id = :a AND user_id = :u AND checked_by IS NULL LIMIT 1'
             )->execute([':a' => $id, ':u' => $uid]);
             flash_set('success', 'ยกเลิกการเข้าร่วมสำเร็จ');
         }
@@ -236,8 +236,8 @@ $app_url_safe = htmlspecialchars(APP_URL, ENT_QUOTES, 'UTF-8');
                 </button>
             </form>
 
-            <?php elseif ($my_reg && (string)$my_reg['status'] === 'registered' && !$ended): ?>
-            <p class="small text-success mb-3"><i class="bi bi-check-circle me-1"></i>คุณยืนยันเข้าร่วมแล้ว</p>
+            <?php elseif ($my_reg && $my_reg['checked_by'] === null && !$ended): ?>
+            <p class="small text-success mb-3"><i class="bi bi-check-circle me-1"></i>คุณเข้าร่วมแล้ว</p>
             <form method="POST"
                   onsubmit="return confirm('ยืนยันการยกเลิกเข้าร่วมกิจกรรมนี้?');">
                 <?= csrf_field() ?>
@@ -250,7 +250,9 @@ $app_url_safe = htmlspecialchars(APP_URL, ENT_QUOTES, 'UTF-8');
             <?php elseif ($my_reg): ?>
             <div class="alert alert-success small mb-0">
                 <i class="bi bi-check-circle me-1"></i>
-                คุณเป็นผู้เข้าร่วมกิจกรรมนี้
+                <?= (string)$my_reg['status'] === 'absent'
+                    ? 'Admin บันทึกว่าคุณไม่ได้เข้าร่วม'
+                    : 'คุณเป็นผู้เข้าร่วมกิจกรรมนี้' ?>
             </div>
 
             <?php elseif ($ended): ?>

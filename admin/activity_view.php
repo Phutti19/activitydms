@@ -143,10 +143,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     if ($exists->fetch()) continue;
 
                     $ins = $pdo->prepare(
-                        'INSERT INTO activity_registrations (activity_id, user_id, status)
-                         VALUES (:a, :u, "registered")'
+                        'INSERT INTO activity_registrations
+                            (activity_id, user_id, status, checked_by, checked_at)
+                         VALUES (:a, :u, "attended", :cb, NOW())'
                     );
-                    $ins->execute([':a' => $id, ':u' => $uid]);
+                    $ins->execute([
+                        ':a'  => $id,
+                        ':u'  => $uid,
+                        ':cb' => (int)$_SESSION['user_id'],
+                    ]);
                     $reg_id = (int)$pdo->lastInsertId();
 
                     audit_log('add_participant', 'activity_registrations', $reg_id, null, [
@@ -749,8 +754,25 @@ require __DIR__ . '/../includes/header.php';
 
     <div class="tab-pane fade" id="tab-attendance">
         <div class="d-flex flex-column flex-md-row gap-2 mb-3 align-items-md-center justify-content-between">
-            <div class="text-muted small">
-                ทั้งหมด <?= count($registrations) ?> คน
+            <div class="small text-muted">
+                ทั้งหมด <strong class="text-body"><?= count($registrations) ?></strong> คน
+                <?php if (!empty($registrations)): ?>
+                <span class="mx-1">·</span>
+                <span title="ลงทะเบียนแล้ว ยังไม่เช็คชื่อ">
+                    <span class="d-inline-block rounded-circle bg-warning align-middle" style="width:8px;height:8px;"></span>
+                    รอเช็ค <strong class="text-body"><?= $registered_count ?></strong>
+                </span>
+                <span class="mx-1">·</span>
+                <span title="เช็คชื่อแล้วว่าเข้าร่วม">
+                    <span class="d-inline-block rounded-circle bg-success align-middle" style="width:8px;height:8px;"></span>
+                    เข้าร่วม <strong class="text-body"><?= $attended_count ?></strong>
+                </span>
+                <span class="mx-1">·</span>
+                <span title="เช็คชื่อแล้วว่าไม่เข้าร่วม">
+                    <span class="d-inline-block rounded-circle bg-danger align-middle" style="width:8px;height:8px;"></span>
+                    ไม่เข้าร่วม <strong class="text-body"><?= $absent_count ?></strong>
+                </span>
+                <?php endif; ?>
             </div>
             <button type="button" class="btn btn-primary"
                     data-bs-toggle="modal" data-bs-target="#addParticipantsModal"
@@ -759,40 +781,67 @@ require __DIR__ . '/../includes/header.php';
             </button>
         </div>
 
+        <?php if (!empty($registrations) && $registered_count > 0): ?>
+        <div class="alert alert-warning small d-flex align-items-start gap-2 py-2 mb-3">
+            <i class="bi bi-info-circle-fill mt-1"></i>
+            <div>
+                มีผู้ลงทะเบียน <?= $registered_count ?> คนที่ยัง<strong>ไม่ได้เช็คชื่อ</strong>
+                — กดเมนู <i class="bi bi-three-dots-vertical"></i> ที่แต่ละแถว
+                หรือเลือกหลายคนเพื่อเช็คชื่อพร้อมกัน
+                <span class="text-muted">(รายงานจะนับเฉพาะคนที่ถูกเช็คชื่อว่า "เข้าร่วม" แล้วเท่านั้น)</span>
+            </div>
+        </div>
+        <?php endif; ?>
+
         <?php if (empty($registrations)): ?>
             <div class="card p-5 text-center text-muted">
                 <i class="bi bi-people" style="font-size:48px;opacity:0.3;"></i>
                 <p class="mt-2 mb-0">ยังไม่มีผู้เข้าร่วม — กดปุ่ม "เพิ่มผู้เข้าร่วม"</p>
             </div>
         <?php else: ?>
-            <form method="POST" id="bulkRemoveForm"
-                  onsubmit="return confirm('ลบผู้เข้าร่วมที่เลือก ' + document.querySelectorAll('.reg-check:checked').length + ' คน?');">
+            <form method="POST" id="bulkAttendanceForm">
                 <?= csrf_field() ?>
-                <input type="hidden" name="action" value="remove_participants_bulk">
+                <input type="hidden" name="action" id="bulkAction" value="update_attendance">
+                <input type="hidden" name="new_status" id="bulkNewStatus" value="">
                 <input type="hidden" name="_tab" value="tab-attendance">
                 <div id="bulkBar" class="card p-2 mb-2 d-none">
                     <div class="d-flex flex-wrap gap-2 align-items-center">
                         <span class="small me-2">เลือก <span id="bulkCount">0</span> คน:</span>
-                        <button type="submit" class="btn btn-sm btn-danger">
+                        <button type="button" class="btn btn-sm btn-success bulk-status-btn" data-status="attended">
+                            <i class="bi bi-check-circle me-1"></i> เช็คว่าเข้าร่วม
+                        </button>
+                        <button type="button" class="btn btn-sm btn-danger bulk-status-btn" data-status="absent">
+                            <i class="bi bi-x-circle me-1"></i> ไม่เข้าร่วม
+                        </button>
+                        <button type="button" class="btn btn-sm btn-warning bulk-status-btn" data-status="registered">
+                            <i class="bi bi-arrow-counterclockwise me-1"></i> รอเช็ค
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-danger ms-md-auto" id="bulkRemoveBtn">
                             <i class="bi bi-trash me-1"></i> ลบที่เลือก
                         </button>
                     </div>
                 </div>
 
                 <div class="card">
-                    <div class="table-responsive">
+                    <div class="table-responsive" style="overflow: visible;">
                         <table class="table table-stack mb-0 align-middle">
                             <thead class="bg-light">
                                 <tr>
                                     <th style="width:36px;"><input type="checkbox" id="selAll" title="เลือกทั้งหมด"></th>
                                     <th>ชื่อ-สกุล</th>
                                     <th>แผนก</th>
+                                    <th class="text-center" style="width:110px;">สถานะ</th>
                                     <th class="text-end" style="width:48px;"></th>
                                 </tr>
                             </thead>
                             <tbody>
                                 <?php foreach ($registrations as $r):
                                     $name_safe = htmlspecialchars($r['fullname'], ENT_QUOTES, 'UTF-8');
+                                    $st_badge = match($r['status']) {
+                                        'attended' => '<span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>เข้าร่วม</span>',
+                                        'absent'   => '<span class="badge bg-danger"><i class="bi bi-x-circle me-1"></i>ไม่เข้าร่วม</span>',
+                                        default    => '<span class="badge bg-warning text-dark"><i class="bi bi-hourglass-split me-1"></i>รอเช็ค</span>',
+                                    };
                                 ?>
                                 <tr>
                                     <td data-label="">
@@ -806,6 +855,7 @@ require __DIR__ . '/../includes/header.php';
                                     <td data-label="แผนก" class="small text-muted">
                                         <?= htmlspecialchars($r['dept_name'] ?? '—', ENT_QUOTES, 'UTF-8') ?>
                                     </td>
+                                    <td data-label="สถานะ" class="text-center"><?= $st_badge ?></td>
                                     <td data-label="" class="text-end text-nowrap">
                                         <div class="dropdown">
                                             <button type="button" class="btn btn-sm btn-link text-muted p-1"
@@ -813,6 +863,34 @@ require __DIR__ . '/../includes/header.php';
                                                 <i class="bi bi-three-dots-vertical"></i>
                                             </button>
                                             <ul class="dropdown-menu dropdown-menu-end">
+                                                <?php if ($r['status'] !== 'attended'): ?>
+                                                <li>
+                                                    <button type="button" class="dropdown-item text-success change-status-btn"
+                                                            data-reg-id="<?= (int)$r['reg_id'] ?>"
+                                                            data-new-status="attended">
+                                                        <i class="bi bi-check-circle me-2"></i> เช็คว่าเข้าร่วม
+                                                    </button>
+                                                </li>
+                                                <?php endif; ?>
+                                                <?php if ($r['status'] !== 'absent'): ?>
+                                                <li>
+                                                    <button type="button" class="dropdown-item text-danger change-status-btn"
+                                                            data-reg-id="<?= (int)$r['reg_id'] ?>"
+                                                            data-new-status="absent">
+                                                        <i class="bi bi-x-circle me-2"></i> ไม่เข้าร่วม
+                                                    </button>
+                                                </li>
+                                                <?php endif; ?>
+                                                <?php if ($r['status'] !== 'registered'): ?>
+                                                <li>
+                                                    <button type="button" class="dropdown-item text-warning change-status-btn"
+                                                            data-reg-id="<?= (int)$r['reg_id'] ?>"
+                                                            data-new-status="registered">
+                                                        <i class="bi bi-arrow-counterclockwise me-2"></i> ตั้งเป็นรอเช็ค
+                                                    </button>
+                                                </li>
+                                                <?php endif; ?>
+                                                <li><hr class="dropdown-divider"></li>
                                                 <li>
                                                     <button type="button" class="dropdown-item text-danger remove-one-btn"
                                                             data-reg-id="<?= (int)$r['reg_id'] ?>"
@@ -836,6 +914,14 @@ require __DIR__ . '/../includes/header.php';
                 <input type="hidden" name="action" value="remove_participant">
                 <input type="hidden" name="_tab" value="tab-attendance">
                 <input type="hidden" name="reg_id" id="removeOneRegId" value="">
+            </form>
+
+            <form method="POST" id="updateOneForm" class="d-none">
+                <?= csrf_field() ?>
+                <input type="hidden" name="action" value="update_attendance">
+                <input type="hidden" name="_tab" value="tab-attendance">
+                <input type="hidden" name="new_status" id="updateOneNewStatus" value="">
+                <input type="hidden" name="reg_ids[]" id="updateOneRegId" value="">
             </form>
         <?php endif; ?>
     </div><!-- /tab-attendance -->
@@ -1083,6 +1169,46 @@ document.addEventListener('click', (e) => {
         idEl.value = btn.dataset.regId;
         fmEl.submit();
     }
+});
+
+// ===== Per-row status change =====
+document.addEventListener('click', (e) => {
+    const btn = e.target.closest('.change-status-btn');
+    if (!btn) return;
+    const fm = document.getElementById('updateOneForm');
+    const idEl = document.getElementById('updateOneRegId');
+    const stEl = document.getElementById('updateOneNewStatus');
+    if (fm && idEl && stEl) {
+        idEl.value = btn.dataset.regId;
+        stEl.value = btn.dataset.newStatus;
+        fm.submit();
+    }
+});
+
+// ===== Bulk attendance buttons =====
+document.addEventListener('click', (e) => {
+    const btn = e.target.closest('.bulk-status-btn');
+    if (!btn) return;
+    const checked = document.querySelectorAll('.reg-check:checked').length;
+    if (checked === 0) return;
+    const labels = { attended: 'เข้าร่วม', absent: 'ไม่เข้าร่วม', registered: 'รอเช็ค' };
+    const status = btn.dataset.status;
+    if (!confirm('เปลี่ยนสถานะของ ' + checked + ' คนเป็น "' + (labels[status] || status) + '"?')) return;
+    document.getElementById('bulkAction').value = 'update_attendance';
+    document.getElementById('bulkNewStatus').value = status;
+    document.getElementById('bulkAttendanceForm').submit();
+});
+
+// ===== Bulk remove button =====
+document.addEventListener('click', (e) => {
+    const btn = e.target.closest('#bulkRemoveBtn');
+    if (!btn) return;
+    const checked = document.querySelectorAll('.reg-check:checked').length;
+    if (checked === 0) return;
+    if (!confirm('ลบผู้เข้าร่วมที่เลือก ' + checked + ' คน?')) return;
+    document.getElementById('bulkAction').value = 'remove_participants_bulk';
+    document.getElementById('bulkNewStatus').value = '';
+    document.getElementById('bulkAttendanceForm').submit();
 });
 
 // ===== Add participants modal — search filter + selection counter (event delegation) =====

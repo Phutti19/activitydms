@@ -31,6 +31,11 @@ function can_access_activity(array $row, string $role, int $uid): bool
     if ($role === 'admin' || $role === 'director') {
         return true;
     }
+    // Employee: registered participants OR any open-registration org activity
+    // (matches employee/activity_view.php view-permission logic)
+    if (!empty($row['is_open_registration'])) {
+        return true;
+    }
     $check = db()->prepare(
         'SELECT 1 FROM activity_registrations
          WHERE activity_id = :a AND user_id = :u LIMIT 1'
@@ -45,7 +50,7 @@ $original_name = '';
 if ($type === 'photo') {
     $stmt = db()->prepare(
         'SELECT p.id, p.activity_id, p.filename, p.original_name,
-                a.scope, a.created_by
+                a.scope, a.created_by, a.is_open_registration
          FROM activity_photos p
          JOIN activities a ON a.id = p.activity_id
          WHERE p.id = :id LIMIT 1'
@@ -59,7 +64,7 @@ if ($type === 'photo') {
 } elseif ($type === 'attachment') {
     $stmt = db()->prepare(
         'SELECT att.id, att.activity_id, att.type, att.filename, att.label,
-                a.scope, a.created_by
+                a.scope, a.created_by, a.is_open_registration
          FROM activity_attachments att
          JOIN activities a ON a.id = att.activity_id
          WHERE att.id = :id AND att.type = "file" LIMIT 1'

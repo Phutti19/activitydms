@@ -639,16 +639,69 @@ a > .card:hover,
     .app-main > .alert { margin-bottom: 12px; }
 }
 
+/* ===== Print-only block (shown only when printing) ===== */
+.print-only { display: none; }
+
 /* ===== Print styles (for reports page) ===== */
+@page {
+    size: A4;
+    margin: 12mm 10mm 14mm 10mm;
+}
 @media print {
+    html, body {
+        background: #fff !important;
+        font-size: 11pt;
+        color: #000 !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
     .app-topbar, .app-sidebar { display: none !important; }
-    .app-main { margin-left: 0 !important; padding: 8px !important; }
+    .app-main { margin-left: 0 !important; padding: 0 !important; }
+    .app-layout { display: block !important; }
+    .alert { display: none !important; }
+
+    .print-only { display: block !important; }
+    .d-print-none, .no-print { display: none !important; }
+
     .card {
         box-shadow: none !important;
-        border: 1px solid #ccc !important;
+        border: 1px solid #bbb !important;
         break-inside: avoid;
+        page-break-inside: avoid;
+        margin-bottom: 10px !important;
+    }
+    .card-header {
+        background: #f3f3f3 !important;
+        border-bottom: 1px solid #bbb !important;
     }
     .btn, form[method="GET"], .page-header .btn { display: none !important; }
+
+    /* Print header block (org + filters + date) */
+    .print-header {
+        text-align: center;
+        margin-bottom: 10px;
+        padding-bottom: 8px;
+        border-bottom: 2px solid #000;
+    }
+    .print-header .org-name {
+        font-size: 14pt;
+        font-weight: 700;
+    }
+    .print-header .report-title {
+        font-size: 13pt;
+        font-weight: 600;
+        margin-top: 2px;
+    }
+    .print-header .meta {
+        font-size: 10pt;
+        color: #333 !important;
+        margin-top: 4px;
+    }
+
+    /* Compact summary cards: keep grid but smaller */
+    .summary-print-grid .card { padding: 6px !important; }
+    .summary-print-grid .fs-2 { font-size: 18pt !important; }
+
     /* Restore table layout for print */
     .table-stack thead { display: table-header-group !important; }
     .table-stack tbody tr {
@@ -665,6 +718,20 @@ a > .card:hover,
     }
     .table-stack tbody td::before { display: none !important; }
     .table-stack tbody td:not([data-label]) { display: table-cell !important; }
+
+    /* Badges: render with background even in print */
+    .badge {
+        border: 1px solid #888 !important;
+        color: #000 !important;
+        background: #eee !important;
+    }
+    a { color: #000 !important; text-decoration: none !important; }
+
+    /* Avoid orphan tables across pages */
+    table { page-break-inside: auto; }
+    tr    { page-break-inside: avoid; page-break-after: auto; }
+    thead { display: table-header-group; }
+    tfoot { display: table-footer-group; }
 }
 
 /* ===== Time pill: 2 selects ที่ดูเหมือน field เดียว (HH:MM + clock icon) ===== */
