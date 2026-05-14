@@ -6,8 +6,11 @@ require_once __DIR__ . '/../includes/csrf.php';
 require_once __DIR__ . '/../includes/flash.php';
 require_once __DIR__ . '/../includes/audit.php';
 require_once __DIR__ . '/../includes/upload.php';
+require_once __DIR__ . '/../includes/fiscal_year.php';
 
 require_role('employee');
+
+const PA_VALID_FORMATS = ['onsite', 'online'];
 
 const PA_ATTACH_MAX_BYTES = 10 * 1024 * 1024; // 10 MB ตามสเปค §7
 const PA_ATTACH_MAX_FILES = 10;
@@ -271,6 +274,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $description = trim((string)($_POST['description'] ?? ''));
         $location    = trim((string)($_POST['location'] ?? ''));
         $type_id     = (int)($_POST['activity_type_id'] ?? 0);
+        $format      = trim((string)($_POST['format'] ?? 'onsite'));
         $fiscal_id   = (int)($_POST['fiscal_year_id'] ?? 0);
         $start_date   = trim((string)($_POST['start_date']   ?? ''));
         $start_hour   = trim((string)($_POST['start_hour']   ?? ''));
@@ -292,6 +296,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $chk_fy->execute([':id' => $fiscal_id]);
         if (!$chk_fy->fetch()) $errors[] = 'ปีงบประมาณไม่ถูกต้อง';
 
+        if (!in_array($format, PA_VALID_FORMATS, true)) $errors[] = 'รูปแบบกิจกรรมไม่ถูกต้อง';
+
         if (!preg_match('/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/', $start_raw)) $errors[] = 'วันเวลาเริ่มต้นไม่ถูกต้อง';
         if (!preg_match('/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/', $end_raw))   $errors[] = 'วันเวลาสิ้นสุดไม่ถูกต้อง';
         if (empty($errors) && strtotime($start_raw) > strtotime($end_raw)) {
@@ -307,13 +313,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (!$is_edit) {
             $stmt = $pdo->prepare(
                 'INSERT INTO activities
-                    (title, description, location, activity_type_id, fiscal_year_id,
+                    (title, description, location, activity_type_id, format, fiscal_year_id,
                      scope, is_open_registration, start_datetime, end_datetime, created_by)
-                 VALUES (:t,:desc,:loc,:type,:fy,"personal",0,:s,:e,:cb)'
+                 VALUES (:t,:desc,:loc,:type,:fmt,:fy,"personal",0,:s,:e,:cb)'
             );
             $stmt->execute([
                 ':t'=>$title, ':desc'=>$description, ':loc'=>$location,
-                ':type'=>$type_id, ':fy'=>$fiscal_id,
+                ':type'=>$type_id, ':fmt'=>$format, ':fy'=>$fiscal_id,
                 ':s'=>$start_raw, ':e'=>$end_raw, ':cb'=>$uid,
             ]);
             $new_id = (int)$pdo->lastInsertId();
@@ -336,13 +342,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $upd = $pdo->prepare(
                 'UPDATE activities SET
                     title=:t, description=:desc, location=:loc,
-                    activity_type_id=:type, fiscal_year_id=:fy,
+                    activity_type_id=:type, format=:fmt, fiscal_year_id=:fy,
                     start_datetime=:s, end_datetime=:e
                  WHERE id=:id AND scope="personal" AND created_by=:u'
             );
             $upd->execute([
                 ':t'=>$title, ':desc'=>$description, ':loc'=>$location,
-                ':type'=>$type_id, ':fy'=>$fiscal_id,
+                ':type'=>$type_id, ':fmt'=>$format, ':fy'=>$fiscal_id,
                 ':s'=>$start_raw, ':e'=>$end_raw,
                 ':id'=>$edit_id, ':u'=>$uid,
             ]);
@@ -488,6 +494,8 @@ $years_stmt = $pdo->prepare(
 $years_stmt->execute();
 $years = $years_stmt->fetchAll();
 
+$default_fy_id = active_fiscal_year_id();
+
 function pa_fmt_date(string $dt): string {
     $ts = strtotime($dt);
     $m  = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
@@ -605,6 +613,17 @@ require __DIR__ . '/../includes/header.php';
                     <?= htmlspecialchars($a['type_name'] ?? '—', ENT_QUOTES, 'UTF-8') ?>
                 </span>
             </div>
+            <div>
+                <?php if (($a['format'] ?? 'onsite') === 'online'): ?>
+                    <span class="badge-pill" style="background:#E0F2FE;color:#0369A1;">
+                        <i class="bi bi-camera-video"></i> ออนไลน์
+                    </span>
+                <?php else: ?>
+                    <span class="badge-pill" style="background:#FEF3C7;color:#92400E;">
+                        <i class="bi bi-geo-alt"></i> ออนไซต์
+                    </span>
+                <?php endif; ?>
+            </div>
             <?php if (!empty($a['description'])): ?>
             <p class="small text-muted mb-0 text-truncate-2">
                 <?= htmlspecialchars($a['description'], ENT_QUOTES, 'UTF-8') ?>
@@ -658,6 +677,7 @@ require __DIR__ . '/../includes/header.php';
                             data-location="<?= htmlspecialchars($a['location'] ?? '', ENT_QUOTES, 'UTF-8') ?>"
                             data-type="<?= (int)$a['activity_type_id'] ?>"
                             data-fiscal="<?= (int)$a['fiscal_year_id'] ?>"
+                            data-format="<?= htmlspecialchars((string)($a['format'] ?? 'onsite'), ENT_QUOTES, 'UTF-8') ?>"
                             <?php
                             [$pa_sd, $pa_sh, $pa_sm] = pa_split_dt((string)$a['start_datetime']);
                             [$pa_ed, $pa_eh, $pa_em] = pa_split_dt((string)$a['end_datetime']);
@@ -834,14 +854,28 @@ require __DIR__ . '/../includes/header.php';
                     </div>
                     <div class="col-12 col-md-6">
                         <label for="fFiscal" class="form-label fw-medium">ปีงบประมาณ <span class="text-danger">*</span></label>
-                        <select id="fFiscal" name="fiscal_year_id" class="form-select" required>
+                        <select id="fFiscal" name="fiscal_year_id" class="form-select" required data-default-fy="<?= (int)($default_fy_id ?? 0) ?>">
                             <option value="">— เลือกปี —</option>
                             <?php foreach ($years as $y): ?>
-                            <option value="<?= (int)$y['id'] ?>">
+                            <option value="<?= (int)$y['id'] ?>"
+                                    <?= ($default_fy_id !== null && (int)$y['id'] === $default_fy_id) ? 'selected' : '' ?>>
                                 <?= htmlspecialchars($y['name'], ENT_QUOTES, 'UTF-8') ?>
                             </option>
                             <?php endforeach; ?>
                         </select>
+                    </div>
+                    <div class="col-12 col-md-6">
+                        <label class="form-label fw-medium d-block">รูปแบบ <span class="text-danger">*</span></label>
+                        <div class="btn-group w-100" role="group" aria-label="รูปแบบกิจกรรม">
+                            <input type="radio" class="btn-check" name="format" id="paFmtOnsite" value="onsite" checked required>
+                            <label class="btn btn-outline-primary" for="paFmtOnsite">
+                                <i class="bi bi-geo-alt me-1"></i> ออนไซต์
+                            </label>
+                            <input type="radio" class="btn-check" name="format" id="paFmtOnline" value="online">
+                            <label class="btn btn-outline-primary" for="paFmtOnline">
+                                <i class="bi bi-camera-video me-1"></i> ออนไลน์
+                            </label>
+                        </div>
                     </div>
                     <div class="col-12 col-md-6">
                         <label for="fStartDate" class="form-label fw-medium">วันเวลาเริ่ม <span class="text-danger">*</span></label>
@@ -952,6 +986,9 @@ document.addEventListener('click', (ev) => {
     document.getElementById('fEndDate').value     = d.endDate     || '';
     document.getElementById('fEndHour').value     = d.endHour     || '';
     document.getElementById('fEndMinute').value   = d.endMinute   || '';
+    const fmt = (d.format === 'online') ? 'online' : 'onsite';
+    const rb  = document.querySelector('input[name="format"][value="' + fmt + '"]');
+    if (rb) rb.checked = true;
     document.getElementById('modalTitle').textContent = 'แก้ไขกิจกรรมส่วนตัว';
     fAttachLabel.textContent = 'ไฟล์แนบ (เพิ่มไฟล์ใหม่)';
 });

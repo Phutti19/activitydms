@@ -7,6 +7,7 @@ require_once __DIR__ . '/../includes/flash.php';
 require_once __DIR__ . '/../includes/audit.php';
 require_once __DIR__ . '/../includes/upload.php';
 require_once __DIR__ . '/../includes/mailer.php';
+require_once __DIR__ . '/../includes/notifications.php';
 
 require_role('admin');
 
@@ -40,8 +41,44 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($photo) {
             $pdo->prepare('DELETE FROM activity_photos WHERE id = :id')->execute([':id' => $photo_id]);
             audit_log('delete_photo', 'activity_photos', $photo_id, $photo, null);
-            safe_unlink_upload('activities', $photo['filename']);
+            if (($photo['source'] ?? 'upload') === 'upload' && !empty($photo['filename'])) {
+                safe_unlink_upload('activities', $photo['filename']);
+            }
             flash_set('success', 'ลบภาพสำเร็จ');
+        }
+
+    } elseif ($action === 'add_drive_photo') {
+        $drive_url = trim((string)($_POST['drive_url'] ?? ''));
+        $parsed    = parse_url($drive_url);
+        $host      = strtolower((string)($parsed['host'] ?? ''));
+        $allowed_hosts = ['drive.google.com', 'docs.google.com'];
+
+        if ($drive_url === '' || mb_strlen($drive_url) > 500
+            || !$parsed
+            || ($parsed['scheme'] ?? '') !== 'https'
+            || !filter_var($drive_url, FILTER_VALIDATE_URL)
+            || !in_array($host, $allowed_hosts, true)) {
+            flash_set('error', 'ลิงก์ Drive ไม่ถูกต้อง (ต้องเป็น https://drive.google.com/... หรือ https://docs.google.com/...)');
+        } else {
+            // หา sort_order ถัดไปจาก drive_link เท่านั้น (ไม่ชนกับ upload ที่จำกัด 1-5)
+            $next = $pdo->prepare(
+                "SELECT COALESCE(MAX(sort_order),0)+1 FROM activity_photos
+                 WHERE activity_id = :a AND source = 'drive_link'"
+            );
+            $next->execute([':a' => $id]);
+            $sort_order = (int)$next->fetchColumn();
+            if ($sort_order < 1) $sort_order = 1;
+
+            $stmt = $pdo->prepare(
+                "INSERT INTO activity_photos (activity_id, source, drive_url, sort_order)
+                 VALUES (:a, 'drive_link', :u, :s)"
+            );
+            $stmt->execute([':a' => $id, ':u' => $drive_url, ':s' => $sort_order]);
+            $photo_id = (int)$pdo->lastInsertId();
+            audit_log('add_drive_photo', 'activity_photos', $photo_id, null, [
+                'activity_id' => $id, 'drive_url' => $drive_url, 'sort_order' => $sort_order,
+            ]);
+            flash_set('success', 'เพิ่มลิงก์ Drive สำเร็จ');
         }
 
     } elseif ($action === 'add_attachment') {
@@ -161,6 +198,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     if (enqueue_new_activity_email($uid, $id)) {
                         $email_count++;
                     }
+                    notify_new_activity($uid, $id);
                     $added++;
                 }
                 $pdo->commit();
@@ -346,6 +384,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 'size'        => $check['size'],
                             ]);
                             enqueue_new_certificate_email($cert_user_id, $id);
+                            notify_new_certificate($cert_user_id, $id);
                             flash_set('success', 'อัปโหลดเกียรติบัตรสำเร็จ');
                         } catch (Throwable $e) {
                             error_log('[activity_view upload_cert] ' . $e->getMessage());
@@ -440,7 +479,9 @@ foreach ($registrations as $r) {
     else                                  $registered_count++;
 }
 
-$photo_count   = count($photos);
+$upload_photos = array_values(array_filter($photos, fn($p) => ($p['source'] ?? 'upload') === 'upload'));
+$drive_photos  = array_values(array_filter($photos, fn($p) => ($p['source'] ?? 'upload') === 'drive_link'));
+$photo_count   = count($upload_photos);
 $can_add_photo = $photo_count < 5;
 
 $certs_raw = db()->prepare(
@@ -499,7 +540,11 @@ require __DIR__ . '/../includes/header.php';
     </li>
     <li class="nav-item">
         <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-photos" type="button">
-            <i class="bi bi-image me-1"></i> ภาพ <span class="badge bg-secondary"><?= $photo_count ?>/5</span>
+            <i class="bi bi-image me-1"></i> ภาพ
+            <span class="badge bg-secondary"><?= $photo_count ?>/5</span>
+            <?php if (!empty($drive_photos)): ?>
+                <span class="badge bg-info text-dark">+<?= count($drive_photos) ?> Drive</span>
+            <?php endif; ?>
         </button>
     </li>
     <li class="nav-item">
@@ -528,6 +573,19 @@ require __DIR__ . '/../includes/header.php';
                     <span class="badge-pill" style="background:<?= $type_color ?>1A;color:<?= $type_color ?>;">
                         <?= htmlspecialchars($activity['type_name'] ?? '—', ENT_QUOTES, 'UTF-8') ?>
                     </span>
+                </div>
+                <div class="col-12 col-md-6">
+                    <div class="text-muted small">รูปแบบ</div>
+                    <?php $_fmt = (string)($activity['format'] ?? 'onsite'); ?>
+                    <?php if ($_fmt === 'online'): ?>
+                        <span class="badge-pill" style="background:#E0F2FE;color:#0369A1;">
+                            <i class="bi bi-camera-video me-1"></i> ออนไลน์
+                        </span>
+                    <?php else: ?>
+                        <span class="badge-pill" style="background:#FEF3C7;color:#92400E;">
+                            <i class="bi bi-geo-alt me-1"></i> ออนไซต์
+                        </span>
+                    <?php endif; ?>
                 </div>
                 <div class="col-12 col-md-6">
                     <div class="text-muted small">ปีงบประมาณ</div>
@@ -594,7 +652,7 @@ require __DIR__ . '/../includes/header.php';
             <i class="bi bi-cloud-arrow-up" style="font-size: 32px; color: #94A3B8;"></i>
             <div class="mt-2 fw-medium">คลิกหรือลากภาพมาวางที่นี่</div>
             <div class="text-muted small">JPG / PNG / WEBP — สูงสุด <?= $max_image_mb ?> MB ต่อไฟล์</div>
-            <div class="text-muted small">เพิ่มได้อีก <span id="remainSlot"><?= 5 - $photo_count ?></span> ภาพ จาก 5</div>
+            <div class="text-muted small">เพิ่มได้อีก <span id="remainSlot"><?= 5 - $photo_count ?></span> ภาพ จาก 5 (อัปโหลด)</div>
             <input type="file" id="photoInput" accept="image/jpeg,image/png,image/webp"
                    multiple capture="environment" style="display:none;">
         </div>
@@ -602,12 +660,58 @@ require __DIR__ . '/../includes/header.php';
         <?php else: ?>
         <div class="alert alert-warning small">
             <i class="bi bi-exclamation-triangle me-1"></i>
-            ครบ 5 ภาพแล้ว — ลบบางภาพก่อนถ้าต้องการเพิ่มภาพใหม่
+            ครบ 5 ภาพ (อัปโหลด) แล้ว — ลบบางภาพหรือใช้ลิงก์ Drive แทน
+        </div>
+        <?php endif; ?>
+
+        <div class="card p-3 mb-3">
+            <h6 class="fw-semibold mb-2">
+                <i class="bi bi-google me-1"></i> เพิ่มลิงก์ Google Drive
+            </h6>
+            <div class="text-muted small mb-2">รูปจำนวนมาก แนะนำให้แชร์เป็นลิงก์อัลบั้ม Drive — ไม่จำกัดจำนวน</div>
+            <form method="POST" class="d-flex flex-column flex-md-row gap-2">
+                <?= csrf_field() ?>
+                <input type="hidden" name="action" value="add_drive_photo">
+                <input type="hidden" name="_tab" value="tab-photos">
+                <input type="url" name="drive_url" class="form-control" required maxlength="500"
+                       placeholder="https://drive.google.com/drive/folders/..."
+                       pattern="https://(drive|docs)\.google\.com/.*">
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-plus-lg me-1"></i> เพิ่มลิงก์
+                </button>
+            </form>
+        </div>
+
+        <?php if (!empty($drive_photos)): ?>
+        <div class="mb-3">
+            <h6 class="fw-semibold mb-2 text-muted small">
+                <i class="bi bi-link-45deg me-1"></i> ลิงก์ Drive (<?= count($drive_photos) ?>)
+            </h6>
+            <div class="list-group">
+                <?php foreach ($drive_photos as $dp):
+                    $du_safe = htmlspecialchars((string)$dp['drive_url'], ENT_QUOTES, 'UTF-8'); ?>
+                <div class="list-group-item d-flex align-items-center gap-2">
+                    <i class="bi bi-google text-primary"></i>
+                    <a href="<?= $du_safe ?>" target="_blank" rel="noopener" class="text-truncate flex-grow-1" title="<?= $du_safe ?>">
+                        <?= $du_safe ?>
+                    </a>
+                    <form method="POST" class="m-0" onsubmit="return confirm('ลบลิงก์นี้?');">
+                        <?= csrf_field() ?>
+                        <input type="hidden" name="action" value="delete_photo">
+                        <input type="hidden" name="photo_id" value="<?= (int)$dp['id'] ?>">
+                        <input type="hidden" name="_tab" value="tab-photos">
+                        <button type="submit" class="btn btn-sm btn-outline-danger" title="ลบ">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </form>
+                </div>
+                <?php endforeach; ?>
+            </div>
         </div>
         <?php endif; ?>
 
         <div id="photoGrid" class="row g-2">
-            <?php foreach ($photos as $p):
+            <?php foreach ($upload_photos as $p):
                 $orig_safe = htmlspecialchars($p['original_name'], ENT_QUOTES, 'UTF-8');
             ?>
             <div class="col-6 col-md-4 col-lg-3" data-photo-id="<?= (int)$p['id'] ?>">
@@ -634,7 +738,7 @@ require __DIR__ . '/../includes/header.php';
                 </div>
             </div>
             <?php endforeach; ?>
-            <?php if (empty($photos)): ?>
+            <?php if (empty($upload_photos) && empty($drive_photos)): ?>
                 <div class="col-12 text-center text-muted py-4">
                     <i class="bi bi-image" style="font-size:48px;opacity:0.3;"></i>
                     <p class="mt-2 mb-0">ยังไม่มีภาพ</p>

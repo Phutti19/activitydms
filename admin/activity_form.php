@@ -5,8 +5,11 @@ require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/csrf.php';
 require_once __DIR__ . '/../includes/flash.php';
 require_once __DIR__ . '/../includes/audit.php';
+require_once __DIR__ . '/../includes/fiscal_year.php';
 
 require_role('admin');
+
+const VALID_FORMATS = ['onsite', 'online'];
 
 $action_param = $_GET['action'] ?? '';
 $id           = (int)($_GET['id'] ?? 0);
@@ -33,6 +36,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $description  = trim((string)($_POST['description'] ?? ''));
     $location     = trim((string)($_POST['location'] ?? ''));
     $type_id      = (int)($_POST['activity_type_id'] ?? 0);
+    $format       = trim((string)($_POST['format'] ?? 'onsite'));
     $fiscal_id    = (int)($_POST['fiscal_year_id'] ?? 0);
     $start_date   = trim((string)($_POST['start_date']   ?? ''));
     $start_hour   = trim((string)($_POST['start_hour']   ?? ''));
@@ -49,6 +53,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $errors = [];
     if ($title === '' || mb_strlen($title) > 255) $errors[] = 'กรุณากรอกชื่อกิจกรรม (ไม่เกิน 255 ตัว)';
     if (mb_strlen($location) > 255) $errors[] = 'สถานที่ยาวเกินกำหนด';
+    if (!in_array($format, VALID_FORMATS, true)) $errors[] = 'รูปแบบกิจกรรมไม่ถูกต้อง';
+    if ($format === 'onsite' && $location === '') $errors[] = 'รูปแบบออนไซต์ต้องระบุสถานที่';
 
     $check = db()->prepare('SELECT 1 FROM activity_types WHERE id = :id AND is_active = 1');
     $check->execute([':id' => $type_id]);
@@ -89,22 +95,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (!$is_edit) {
             $stmt = $pdo->prepare(
                 'INSERT INTO activities
-                    (title, description, location, activity_type_id, fiscal_year_id,
+                    (title, description, location, activity_type_id, format, fiscal_year_id,
                      scope, is_open_registration, start_datetime, end_datetime,
                      external_url, created_by)
-                 VALUES (:t, :desc, :loc, :type, :fy, "organization", :open,
+                 VALUES (:t, :desc, :loc, :type, :fmt, :fy, "organization", :open,
                          :s, :e, :url, :cb)'
             );
             $stmt->execute([
                 ':t'=>$title, ':desc'=>$description, ':loc'=>$location,
-                ':type'=>$type_id, ':fy'=>$fiscal_id, ':open'=>$is_open_reg,
+                ':type'=>$type_id, ':fmt'=>$format, ':fy'=>$fiscal_id, ':open'=>$is_open_reg,
                 ':s'=>$start_db, ':e'=>$end_db,
                 ':url'=>$external_url !== '' ? $external_url : null,
                 ':cb'=>(int)$_SESSION['user_id'],
             ]);
             $new_id = (int)$pdo->lastInsertId();
             audit_log('create_activity', 'activities', $new_id, null, [
-                'title'=>$title, 'type_id'=>$type_id, 'fiscal_year_id'=>$fiscal_id,
+                'title'=>$title, 'type_id'=>$type_id, 'format'=>$format, 'fiscal_year_id'=>$fiscal_id,
                 'start'=>$start_db, 'end'=>$end_db, 'is_open_registration'=>$is_open_reg,
             ]);
             flash_set('success', 'สร้างกิจกรรมสำเร็จ — เพิ่มภาพและไฟล์แนบได้ที่หน้ารายละเอียด');
@@ -115,7 +121,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $stmt = $pdo->prepare(
                 'UPDATE activities SET
                     title=:t, description=:desc, location=:loc,
-                    activity_type_id=:type, fiscal_year_id=:fy,
+                    activity_type_id=:type, format=:fmt, fiscal_year_id=:fy,
                     is_open_registration=:open,
                     start_datetime=:s, end_datetime=:e,
                     external_url=:url
@@ -123,13 +129,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             );
             $stmt->execute([
                 ':t'=>$title, ':desc'=>$description, ':loc'=>$location,
-                ':type'=>$type_id, ':fy'=>$fiscal_id, ':open'=>$is_open_reg,
+                ':type'=>$type_id, ':fmt'=>$format, ':fy'=>$fiscal_id, ':open'=>$is_open_reg,
                 ':s'=>$start_db, ':e'=>$end_db,
                 ':url'=>$external_url !== '' ? $external_url : null,
                 ':id'=>$id,
             ]);
             audit_log('update_activity', 'activities', $id, $activity, [
-                'title'=>$title, 'type_id'=>$type_id, 'fiscal_year_id'=>$fiscal_id,
+                'title'=>$title, 'type_id'=>$type_id, 'format'=>$format, 'fiscal_year_id'=>$fiscal_id,
                 'start'=>$start_db, 'end'=>$end_db, 'is_open_registration'=>$is_open_reg,
             ]);
             flash_set('success', 'แก้ไขกิจกรรมสำเร็จ');
@@ -186,8 +192,11 @@ if ($form !== null) {
 
 $default_fiscal = (int)$val('fiscal_year_id', 0);
 if ($default_fiscal === 0 && !$is_edit) {
-    foreach ($years as $y) if ((int)$y['is_active'] === 1) { $default_fiscal = (int)$y['id']; break; }
+    $default_fiscal = active_fiscal_year_id() ?? 0;
 }
+
+$current_format = (string)$val('format', 'onsite');
+if (!in_array($current_format, VALID_FORMATS, true)) $current_format = 'onsite';
 
 $is_open_default = $is_edit
     ? (int)($activity['is_open_registration'] ?? 0)
@@ -240,6 +249,24 @@ require __DIR__ . '/../includes/header.php';
                     <?php endforeach; ?>
                 </select>
             </div>
+            <div class="col-12 col-md-6">
+                <label class="form-label small fw-medium d-block">
+                    รูปแบบ <span class="text-danger">*</span>
+                </label>
+                <div class="btn-group w-100" role="group" aria-label="รูปแบบกิจกรรม">
+                    <input type="radio" class="btn-check" name="format" id="fmtOnsite" value="onsite"
+                           <?= $current_format === 'onsite' ? 'checked' : '' ?> required>
+                    <label class="btn btn-outline-primary" for="fmtOnsite">
+                        <i class="bi bi-geo-alt me-1"></i> ออนไซต์
+                    </label>
+                    <input type="radio" class="btn-check" name="format" id="fmtOnline" value="online"
+                           <?= $current_format === 'online' ? 'checked' : '' ?>>
+                    <label class="btn btn-outline-primary" for="fmtOnline">
+                        <i class="bi bi-camera-video me-1"></i> ออนไลน์
+                    </label>
+                </div>
+            </div>
+
             <div class="col-12 col-md-6">
                 <label for="aFiscal" class="form-label small fw-medium">
                     ปีงบประมาณ <span class="text-danger">*</span>
@@ -316,10 +343,18 @@ require __DIR__ . '/../includes/header.php';
             </div>
 
             <div class="col-12">
-                <label for="aLocation" class="form-label small fw-medium">สถานที่</label>
+                <label for="aLocation" class="form-label small fw-medium">
+                    <span data-fmt-label data-onsite="สถานที่" data-online="แพลตฟอร์มออนไลน์ / ลิงก์เข้าร่วม">สถานที่</span>
+                </label>
                 <input type="text" id="aLocation" name="location" class="form-control" maxlength="255"
                        value="<?= htmlspecialchars($val('location'), ENT_QUOTES, 'UTF-8') ?>"
                        placeholder="เช่น ห้องประชุมใหญ่ ชั้น 3 อาคาร 50">
+                <div class="form-text small">
+                    <span data-fmt-hint data-onsite="ออนไซต์ — ระบุสถานที่จริง"
+                          data-online="ออนไลน์ — แนะนำใส่ชื่อแพลตฟอร์ม (Zoom, Google Meet) ที่ช่อง 'ลิงก์ภายนอก' ด้านล่าง">
+                        ออนไซต์ — ระบุสถานที่จริง
+                    </span>
+                </div>
             </div>
 
             <div class="col-12">
@@ -362,5 +397,21 @@ require __DIR__ . '/../includes/header.php';
            class="btn btn-outline-secondary">ยกเลิก</a>
     </div>
 </form>
+
+<script>
+(function () {
+    const sync = () => {
+        const sel = document.querySelector('input[name="format"]:checked');
+        const f = sel ? sel.value : 'onsite';
+        document.querySelectorAll('[data-fmt-label], [data-fmt-hint]').forEach(el => {
+            const v = el.dataset[f];
+            if (v) el.textContent = v;
+        });
+    };
+    document.querySelectorAll('input[name="format"]').forEach(el =>
+        el.addEventListener('change', sync));
+    sync();
+})();
+</script>
 
 <?php require __DIR__ . '/../includes/footer.php'; ?>

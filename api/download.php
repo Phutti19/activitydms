@@ -49,7 +49,7 @@ $original_name = '';
 
 if ($type === 'photo') {
     $stmt = db()->prepare(
-        'SELECT p.id, p.activity_id, p.filename, p.original_name,
+        'SELECT p.id, p.activity_id, p.source, p.filename, p.original_name, p.drive_url,
                 a.scope, a.created_by, a.is_open_registration
          FROM activity_photos p
          JOIN activities a ON a.id = p.activity_id
@@ -59,6 +59,18 @@ if ($type === 'photo') {
     $row = $stmt->fetch();
     if (!$row) { http_response_code(404); exit('Not found'); }
     if (!can_access_activity($row, $role, $uid)) { http_response_code(403); exit('Forbidden'); }
+
+    // drive_link → redirect แทนการ stream ไฟล์ (ไม่มีไฟล์จริง)
+    if (($row['source'] ?? 'upload') === 'drive_link') {
+        $du = (string)($row['drive_url'] ?? '');
+        if ($du !== '' && filter_var($du, FILTER_VALIDATE_URL)) {
+            header('Location: ' . $du, true, 302);
+            exit;
+        }
+        http_response_code(404);
+        exit('Drive link missing');
+    }
+
     $original_name = $row['original_name'];
 
 } elseif ($type === 'attachment') {

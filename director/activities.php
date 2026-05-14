@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/../includes/auth.php';
+require_once __DIR__ . '/../includes/fiscal_year.php';
 require_role('director');
 
 $pdo = db();
@@ -23,10 +24,7 @@ $types_stmt->execute();
 $types = $types_stmt->fetchAll();
 
 if ($f_fiscal === 0 && !isset($_GET['fiscal'])) {
-    $fy_active_stmt = $pdo->prepare('SELECT id FROM fiscal_years WHERE is_active = 1 LIMIT 1');
-    $fy_active_stmt->execute();
-    $fy_active = $fy_active_stmt->fetch();
-    if ($fy_active) $f_fiscal = (int)$fy_active['id'];
+    $f_fiscal = active_fiscal_year_id() ?? 0;
 }
 
 // ---------------------------------------------------------------------------

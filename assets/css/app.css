@@ -100,7 +100,14 @@ body::-webkit-scrollbar {
         z-index: 1030;
     }
     .app-main { margin-left: 260px; }
-    .app-topbar { display: none !important; }
+    /* topbar แสดงบน desktop ด้วย (สำหรับ bell notification) แต่ขยับให้พ้น sidebar */
+    .app-topbar { padding-left: calc(260px + 16px) !important; }
+    /* ซ่อนปุ่ม hamburger + brand text + avatar บน desktop (sidebar แสดงอยู่แล้ว) */
+    .app-topbar .topbar-hamburger,
+    .app-topbar .topbar-brand,
+    .app-topbar .topbar-avatar { display: none !important; }
+    /* topbar บน desktop มีแค่ bell ที่ขวา */
+    .app-topbar { justify-content: flex-end; }
 }
 
 .app-main {

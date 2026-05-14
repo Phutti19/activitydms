@@ -214,6 +214,15 @@ require __DIR__ . '/../includes/header.php';
                     <span class="badge-pill" style="background:#DBEAFE;color:#1E40AF;">
                         <i class="bi bi-building"></i> องค์กร
                     </span>
+                    <?php if (($a['format'] ?? 'onsite') === 'online'): ?>
+                        <span class="badge-pill" style="background:#E0F2FE;color:#0369A1;">
+                            <i class="bi bi-camera-video"></i> ออนไลน์
+                        </span>
+                    <?php else: ?>
+                        <span class="badge-pill" style="background:#FEF3C7;color:#92400E;">
+                            <i class="bi bi-geo-alt"></i> ออนไซต์
+                        </span>
+                    <?php endif; ?>
                     <span class="badge-pill" style="background:<?= $ts['bg'] ?>;color:<?= $ts['fg'] ?>;">
                         <?= htmlspecialchars($ts['label'], ENT_QUOTES, 'UTF-8') ?>
                     </span>

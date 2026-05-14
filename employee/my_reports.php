@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/../includes/auth.php';
+require_once __DIR__ . '/../includes/fiscal_year.php';
 require_role('employee');
 
 $uid = (int) current_user_id();
@@ -17,12 +18,9 @@ $years_stmt = $pdo->prepare('SELECT id, name FROM fiscal_years ORDER BY start_ye
 $years_stmt->execute();
 $years = $years_stmt->fetchAll();
 
-// Default to active fiscal year
+// Default to active fiscal year (date-based auto-switch)
 if ($f_fiscal === 0 && !isset($_GET['fiscal'])) {
-    $fy_stmt = $pdo->prepare('SELECT id FROM fiscal_years WHERE is_active = 1 LIMIT 1');
-    $fy_stmt->execute();
-    $fy_active = $fy_stmt->fetch();
-    if ($fy_active) $f_fiscal = (int)$fy_active['id'];
+    $f_fiscal = active_fiscal_year_id() ?? 0;
 }
 
 // ---------------------------------------------------------------------------

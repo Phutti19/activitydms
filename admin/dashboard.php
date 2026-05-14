@@ -2,16 +2,21 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/../includes/auth.php';
+require_once __DIR__ . '/../includes/fiscal_year.php';
 require_role('admin');
 
 $pdo = db();
 
-// ปีงบประมาณที่ active
-$fy_stmt = $pdo->prepare('SELECT id, name FROM fiscal_years WHERE is_active = 1 LIMIT 1');
-$fy_stmt->execute();
-$fy = $fy_stmt->fetch();
+// ปีงบประมาณ active (date-based auto-switch)
+$fy = active_fiscal_year();
 $fy_id   = $fy ? (int)$fy['id'] : 0;
 $fy_name = $fy ? $fy['name'] : '—';
+
+// แจ้งเตือน admin ให้ seed ปีถัดไปเมื่อใกล้หมด
+$fy_days_left   = days_until_fy_end();
+$fy_has_next    = next_fiscal_year_exists();
+$fy_warn_seed   = $fy_days_left !== null && $fy_days_left <= 60 && !$fy_has_next;
+$fy_warn_expired= $fy_days_left !== null && $fy_days_left < 0;
 
 $fy_clause = $fy_id > 0 ? 'AND a.fiscal_year_id = :fy' : '';
 $fy_params = $fy_id > 0 ? [':fy' => $fy_id] : [];
@@ -141,6 +146,36 @@ $thai_months = ['','ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.',
 $thai_days   = ['อา','จ','อ','พ','พฤ','ศ','ส'];
 $today_label = $thai_days[(int)date('w')] . ' ' . date('j') . ' ' . $thai_months[(int)date('n')] . ' ' . ((int)date('Y') + 543);
 ?>
+
+<?php if ($fy_warn_expired): ?>
+<div class="alert alert-danger d-flex align-items-start gap-2 mb-3" role="alert">
+    <i class="bi bi-exclamation-octagon-fill fs-4"></i>
+    <div class="flex-grow-1">
+        <div class="fw-semibold">ปีงบประมาณ <?= htmlspecialchars($fy_name, ENT_QUOTES, 'UTF-8') ?> หมดอายุแล้ว</div>
+        <div class="small">
+            ระบบกำลังใช้ปีนี้เป็นค่าเริ่มต้น (fallback) เนื่องจากไม่มีปีงบประมาณที่ครอบคลุมวันนี้
+            กรุณาเพิ่มปีงบประมาณถัดไปทันที
+        </div>
+    </div>
+    <a href="<?= htmlspecialchars(APP_URL, ENT_QUOTES, 'UTF-8') ?>/admin/manage_fiscal_year.php"
+       class="btn btn-sm btn-danger flex-shrink-0">เพิ่มปีงบประมาณ</a>
+</div>
+<?php elseif ($fy_warn_seed): ?>
+<div class="alert alert-warning d-flex align-items-start gap-2 mb-3" role="alert">
+    <i class="bi bi-exclamation-triangle-fill fs-4"></i>
+    <div class="flex-grow-1">
+        <div class="fw-semibold">
+            ปีงบประมาณ <?= htmlspecialchars($fy_name, ENT_QUOTES, 'UTF-8') ?>
+            จะหมดในอีก <?= (int)$fy_days_left ?> วัน
+        </div>
+        <div class="small">
+            ยังไม่มีปีงบประมาณถัดไปในระบบ — กรุณาเพิ่มล่วงหน้าเพื่อให้ระบบ auto-switch เมื่อขึ้นปีใหม่
+        </div>
+    </div>
+    <a href="<?= htmlspecialchars(APP_URL, ENT_QUOTES, 'UTF-8') ?>/admin/manage_fiscal_year.php"
+       class="btn btn-sm btn-warning flex-shrink-0">เพิ่มปีงบประมาณ</a>
+</div>
+<?php endif; ?>
 
 <!-- Hero greeting -->
 <div class="card mb-4 border-0 text-white"

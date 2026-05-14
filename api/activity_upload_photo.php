@@ -45,11 +45,13 @@ if (!$check->fetch()) {
     exit;
 }
 
-// Pre-check (สเปค §4.2: max 5)
-$count = $pdo->prepare('SELECT COUNT(*) FROM activity_photos WHERE activity_id = :id');
+// Pre-check (สเปค §4.2: max 5 — เฉพาะ source='upload', drive_link ไม่จำกัด มติประชุม 2026-05-14)
+$count = $pdo->prepare(
+    "SELECT COUNT(*) FROM activity_photos WHERE activity_id = :id AND source = 'upload'"
+);
 $count->execute([':id' => $activity_id]);
 if ((int)$count->fetchColumn() >= 5) {
-    echo json_encode(['ok' => false, 'error' => 'ครบ 5 ภาพแล้ว']);
+    echo json_encode(['ok' => false, 'error' => 'ครบ 5 ภาพ (อัปโหลด) แล้ว — เพิ่มเป็นลิงก์ Drive แทนได้']);
     exit;
 }
 
@@ -75,13 +77,15 @@ if ($original_name === '' || mb_strlen($original_name) > 255) {
 $filename = null;
 $pdo->beginTransaction();
 try {
-    // Race-safe re-check ภายใน transaction
-    $count2 = $pdo->prepare('SELECT COUNT(*) FROM activity_photos WHERE activity_id = :id FOR UPDATE');
+    // Race-safe re-check ภายใน transaction — นับเฉพาะ source='upload'
+    $count2 = $pdo->prepare(
+        "SELECT COUNT(*) FROM activity_photos WHERE activity_id = :id AND source = 'upload' FOR UPDATE"
+    );
     $count2->execute([':id' => $activity_id]);
     $current = (int)$count2->fetchColumn();
     if ($current >= 5) {
         $pdo->rollBack();
-        echo json_encode(['ok' => false, 'error' => 'ครบ 5 ภาพแล้ว']);
+        echo json_encode(['ok' => false, 'error' => 'ครบ 5 ภาพ (อัปโหลด) แล้ว']);
         exit;
     }
 
@@ -89,8 +93,8 @@ try {
 
     $next_order = $current + 1;
     $stmt = $pdo->prepare(
-        'INSERT INTO activity_photos (activity_id, filename, original_name, sort_order)
-         VALUES (:a, :f, :o, :s)'
+        "INSERT INTO activity_photos (activity_id, source, filename, original_name, sort_order)
+         VALUES (:a, 'upload', :f, :o, :s)"
     );
     $stmt->execute([
         ':a' => $activity_id,

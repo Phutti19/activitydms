@@ -7,6 +7,7 @@ require_once __DIR__ . '/../includes/flash.php';
 require_once __DIR__ . '/../includes/upload.php';
 require_once __DIR__ . '/../includes/audit.php';
 require_once __DIR__ . '/../includes/mailer.php';
+require_once __DIR__ . '/../includes/notifications.php';
 
 require_role('admin');
 
@@ -95,6 +96,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                     'size'        => $check['size'],
                                 ]);
                                 enqueue_new_certificate_email($cert_user_id, $cert_activity_id);
+                                notify_new_certificate($cert_user_id, $cert_activity_id);
                                 flash_set('success', 'อัปโหลดเกียรติบัตรสำเร็จ');
                             } catch (Throwable $e) {
                                 error_log('[manage_certificates] ' . $e->getMessage());

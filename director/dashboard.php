@@ -2,14 +2,13 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/../includes/auth.php';
+require_once __DIR__ . '/../includes/fiscal_year.php';
 require_role('director');
 
 $pdo = db();
 
-// Active fiscal year
-$fy_stmt = $pdo->prepare('SELECT id, name FROM fiscal_years WHERE is_active = 1 LIMIT 1');
-$fy_stmt->execute();
-$fy = $fy_stmt->fetch();
+// Active fiscal year (date-based auto-switch)
+$fy = active_fiscal_year();
 $fy_id   = $fy ? (int)$fy['id'] : 0;
 $fy_name = $fy ? $fy['name'] : '—';
 

@@ -66,6 +66,7 @@ CREATE TABLE IF NOT EXISTS `activities` (
   `description`          TEXT                                  COMMENT 'รายละเอียดกิจกรรม (HTML หรือ plain text)',
   `location`             VARCHAR(255)     NOT NULL DEFAULT ''  COMMENT 'สถานที่จัดกิจกรรม',
   `activity_type_id`     TINYINT UNSIGNED NOT NULL             COMMENT 'FK → activity_types.id (ประชุม/อบรม/สัมมนา/อื่นๆ)',
+  `format`               ENUM('onsite','online') NOT NULL DEFAULT 'onsite' COMMENT 'รูปแบบกิจกรรม onsite=ออนไซต์ | online=ออนไลน์',
   `fiscal_year_id`       SMALLINT UNSIGNED NOT NULL            COMMENT 'FK → fiscal_years.id ปีงบประมาณที่กิจกรรมนี้สังกัด',
   `scope`                ENUM('organization','personal') NOT NULL DEFAULT 'organization' COMMENT 'organization=Admin สร้าง เห็นทั้งองค์กร | personal=Employee สร้างให้ตัวเอง ไม่มีใครเห็น',
   `is_open_registration` TINYINT(1)       NOT NULL DEFAULT 0   COMMENT '1=เปิดให้พนักงานเข้าร่วมเองได้',
@@ -86,15 +87,21 @@ CREATE TABLE IF NOT EXISTS `activities` (
 CREATE TABLE IF NOT EXISTS `activity_photos` (
   `id`            INT UNSIGNED NOT NULL AUTO_INCREMENT,
   `activity_id`   INT UNSIGNED NOT NULL             COMMENT 'FK → activities.id (CASCADE DELETE)',
-  `filename`      VARCHAR(255) NOT NULL             COMMENT 'ชื่อไฟล์ที่เก็บจริง (UUID-based) ห้ามใช้ชื่อเดิมจาก client',
-  `original_name` VARCHAR(255) NOT NULL             COMMENT 'ชื่อไฟล์ต้นฉบับ ใช้แสดงผลเท่านั้น',
-  `sort_order`    TINYINT UNSIGNED NOT NULL DEFAULT 1 COMMENT 'ลำดับภาพ 1-5 (CHECK constraint บังคับไม่เกิน 5 ใบ)',
+  `source`        ENUM('upload','drive_link') NOT NULL DEFAULT 'upload' COMMENT 'upload=ไฟล์อัปโหลด จำกัด ≤5/กิจกรรม | drive_link=ลิงก์ Drive ไม่จำกัด',
+  `filename`      VARCHAR(255)          DEFAULT NULL COMMENT 'ชื่อไฟล์จริง (UUID) — ใช้เมื่อ source=upload',
+  `original_name` VARCHAR(255)          DEFAULT NULL COMMENT 'ชื่อไฟล์ต้นฉบับ — ใช้เมื่อ source=upload',
+  `drive_url`     VARCHAR(500)          DEFAULT NULL COMMENT 'URL Google Drive — ใช้เมื่อ source=drive_link',
+  `sort_order`    TINYINT UNSIGNED NOT NULL DEFAULT 1 COMMENT 'ลำดับภาพ — upload จำกัด 1-5, drive_link แค่ลำดับการแสดงผล',
   `created_at`    TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   KEY `idx_activity` (`activity_id`),
-  CONSTRAINT `chk_photos_order` CHECK (`sort_order` BETWEEN 1 AND 5)
+  CONSTRAINT `chk_photos_source` CHECK (
+    (`source` = 'upload'     AND `filename`  IS NOT NULL AND `drive_url` IS NULL AND `sort_order` BETWEEN 1 AND 5)
+    OR
+    (`source` = 'drive_link' AND `drive_url` IS NOT NULL AND `filename`  IS NULL)
+  )
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-  COMMENT='ภาพถ่ายกิจกรรม จำกัดสูงสุด 5 ภาพต่อกิจกรรม — validate ทั้ง CHECK constraint และ PHP application';
+  COMMENT='รูปภาพกิจกรรม — รองรับ 2 source: upload (≤5/กิจกรรม) และ drive_link (ไม่จำกัด, ตามมติประชุม 2026-05-14)';
 
 CREATE TABLE IF NOT EXISTS `activity_attachments` (
   `id`          INT UNSIGNED NOT NULL AUTO_INCREMENT,
@@ -195,6 +202,23 @@ CREATE TABLE IF NOT EXISTS `notification_settings` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   COMMENT='ตั้งค่าการแจ้งเตือนอีเมล Admin เปิด/ปิดแต่ละ trigger ได้ — seed 2 records (กิจกรรม + เกียรติบัตร)';
 
+CREATE TABLE IF NOT EXISTS `notifications` (
+  `id`         INT UNSIGNED     NOT NULL AUTO_INCREMENT,
+  `user_id`    INT UNSIGNED     NOT NULL             COMMENT 'FK → users.id ผู้รับ (CASCADE DELETE)',
+  `type`       ENUM('new_activity','new_certificate','system') NOT NULL COMMENT 'ประเภท — เคารพ key เดียวกับ notification_settings (new_activity/new_certificate)',
+  `title`      VARCHAR(255)     NOT NULL             COMMENT 'หัวข้อแสดงใน bell dropdown',
+  `message`    TEXT                                   COMMENT 'รายละเอียดเพิ่มเติม (optional)',
+  `link_url`   VARCHAR(500)              DEFAULT NULL COMMENT 'URL ที่เปิดเมื่อคลิก (ภายในระบบ)',
+  `ref_type`   VARCHAR(50)              DEFAULT NULL COMMENT 'ประเภท ref เช่น activity / certificate',
+  `ref_id`     INT UNSIGNED             DEFAULT NULL COMMENT 'ID ของ ref (loose — ไม่ผูก FK)',
+  `is_read`    TINYINT(1)       NOT NULL DEFAULT 0   COMMENT '1=อ่านแล้ว 0=ยังไม่อ่าน',
+  `created_at` TIMESTAMP        NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `read_at`    DATETIME                  DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_user_unread` (`user_id`, `is_read`, `created_at`) COMMENT 'ใช้ดึง unread + count badge ใน bell'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  COMMENT='In-app notification (🔔 bell) ทำงานคู่ email_queue เคารพ notification_settings เดียวกัน';
+
 CREATE TABLE IF NOT EXISTS `audit_logs` (
   `id`         BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   `user_id`    INT UNSIGNED     DEFAULT NULL COMMENT 'FK → users.id ผู้กระทำ (NULL=ระบบ/cron)',
@@ -228,6 +252,7 @@ ALTER TABLE `certificates`           ADD CONSTRAINT `fk_cert_act`            FOR
 ALTER TABLE `certificates`           ADD CONSTRAINT `fk_cert_user`           FOREIGN KEY (`user_id`)          REFERENCES `users`          (`id`) ON DELETE CASCADE;
 ALTER TABLE `certificates`           ADD CONSTRAINT `fk_cert_uploader`       FOREIGN KEY (`uploaded_by`)      REFERENCES `users`          (`id`);
 ALTER TABLE `email_logs`             ADD CONSTRAINT `fk_emaillog_queue`      FOREIGN KEY (`queue_id`)         REFERENCES `email_queue`    (`id`) ON DELETE CASCADE;
+ALTER TABLE `notifications`          ADD CONSTRAINT `fk_notif_user`          FOREIGN KEY (`user_id`)          REFERENCES `users`          (`id`) ON DELETE CASCADE;
 
 -- Seed: departments
 INSERT INTO `departments` (`id`, `name`) VALUES
@@ -235,9 +260,12 @@ INSERT INTO `departments` (`id`, `name`) VALUES
   (2, 'งานเทคโนโลยีสารสนเทศดิจิทัล'),
   (3, 'งานทรัพยากรสารสนเทศและภาษาต่างประเทศ');
 
--- Seed: fiscal_years (2568 = ต.ค. 2567 – ก.ย. 2568)
+-- Seed: fiscal_years
+--   2568 = ต.ค. 2567 – ก.ย. 2568 (legacy, inactive)
+--   2569 = ต.ค. 2568 – ก.ย. 2569 (active — มติประชุม 2026-05-14)
 INSERT INTO `fiscal_years` (`name`, `start_month`, `start_year`, `end_month`, `end_year`, `is_active`) VALUES
-  ('2568', 10, 2024, 9, 2025, 1);
+  ('2568', 10, 2024, 9, 2025, 0),
+  ('2569', 10, 2025, 9, 2026, 1);
 
 -- Seed: activity_types
 INSERT INTO `activity_types` (`name`, `color`) VALUES

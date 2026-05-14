@@ -5,6 +5,11 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/csrf.php';
 require_once __DIR__ . '/flash.php';
+require_once __DIR__ . '/notifications.php';
+
+$_header_unread = isset($_SESSION['user_id'])
+    ? unread_notification_count((int)$_SESSION['user_id'])
+    : 0;
 
 $role         = $_SESSION['role'] ?? 'employee';
 $display_name = $_SESSION['display_name'] ?? '';
@@ -65,19 +70,54 @@ $app_url = htmlspecialchars(APP_URL, ENT_QUOTES, 'UTF-8');
 <body>
 
 <nav class="app-topbar d-flex align-items-center px-3">
-    <button class="btn btn-link text-dark p-2" type="button"
+    <button class="btn btn-link text-dark p-2 topbar-hamburger" type="button"
             data-bs-toggle="offcanvas" data-bs-target="#sidebar"
             aria-controls="sidebar" aria-label="เปิดเมนู">
         <i class="bi bi-list fs-4"></i>
     </button>
-    <span class="fw-bold ms-2"><?= htmlspecialchars(APP_NAME, ENT_QUOTES, 'UTF-8') ?></span>
-    <div class="ms-auto">
-        <span class="sidebar-user-avatar role-<?= htmlspecialchars($role, ENT_QUOTES, 'UTF-8') ?>"
+    <span class="fw-bold ms-2 topbar-brand"><?= htmlspecialchars(APP_NAME, ENT_QUOTES, 'UTF-8') ?></span>
+    <div class="ms-auto d-flex align-items-center gap-2">
+
+        <div class="dropdown" id="notifBellWrap">
+            <button class="btn btn-link text-dark p-2 position-relative" type="button"
+                    id="notifBellBtn" data-bs-toggle="dropdown" data-bs-auto-close="outside"
+                    aria-expanded="false" aria-label="การแจ้งเตือน">
+                <i class="bi bi-bell fs-5"></i>
+                <span id="notifBadge"
+                      class="position-absolute badge rounded-pill bg-danger"
+                      style="top:2px; right:0; font-size:10px; line-height:1; padding:3px 5px; min-width:16px; <?= $_header_unread > 0 ? '' : 'display:none;' ?>">
+                    <?= $_header_unread > 99 ? '99+' : (int)$_header_unread ?>
+                </span>
+            </button>
+            <div class="dropdown-menu dropdown-menu-end p-0 shadow"
+                 aria-labelledby="notifBellBtn"
+                 style="width: min(360px, 95vw); max-height: 70vh; overflow: hidden;">
+                <div class="d-flex align-items-center justify-content-between px-3 py-2 border-bottom">
+                    <strong class="small">การแจ้งเตือน</strong>
+                    <button type="button" id="notifMarkAll" class="btn btn-link btn-sm p-0 text-decoration-none">
+                        อ่านทั้งหมด
+                    </button>
+                </div>
+                <div id="notifList" style="max-height: 60vh; overflow-y: auto;">
+                    <div class="text-center text-muted small py-4">
+                        <i class="bi bi-hourglass-split"></i> กำลังโหลด...
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <span class="sidebar-user-avatar role-<?= htmlspecialchars($role, ENT_QUOTES, 'UTF-8') ?> topbar-avatar"
               style="width:32px;height:32px;font-size:13px;">
             <?= htmlspecialchars($initial, ENT_QUOTES, 'UTF-8') ?>
         </span>
     </div>
 </nav>
+
+<script>
+window.__APP_URL__   = <?= json_encode(APP_URL, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>;
+window.__CSRF_TOKEN__ = <?= json_encode($_SESSION[CSRF_TOKEN_NAME] ?? '', JSON_UNESCAPED_SLASHES) ?>;
+window.__CSRF_NAME__  = <?= json_encode(CSRF_TOKEN_NAME, JSON_UNESCAPED_SLASHES) ?>;
+</script>
 
 <div class="app-layout d-flex flex-column flex-lg-row">
 

@@ -11,6 +11,7 @@ window.addEventListener('unhandledrejection', (e) => {
     }
 });
 </script>
+<script src="<?= htmlspecialchars(APP_URL, ENT_QUOTES, 'UTF-8') ?>/assets/js/notifications.js?v=<?= @filemtime(__DIR__ . '/../assets/js/notifications.js') ?: time() ?>" defer></script>
 <?= $extra_scripts ?? '' ?>
 </body>
 </html>
