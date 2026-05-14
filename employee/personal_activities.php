@@ -51,7 +51,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
 
     // ---- helper: process uploaded attachments for an activity owned by current user ----
-    $process_attachments = function(int $activity_id) use ($pdo, $uid): void {
+    $process_attachments = function(int $activity_id) use ($pdo): void {
         if (empty($_FILES['attachments']) || !is_array($_FILES['attachments']['name'])) return;
         $names = $_FILES['attachments']['name'];
         $count = count($names);
@@ -85,7 +85,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             try {
                 $stored = move_uploaded_with_uuid($one, 'activities', $result['ext']);
-            } catch (Throwable $ex) {
+            } catch (Throwable) {
                 flash_set('error', 'บันทึกไฟล์ "' . $one['name'] . '" ไม่สำเร็จ');
                 continue;
             }
@@ -365,7 +365,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($action === 'delete') {
         $del_id = (int)($_POST['del_id'] ?? 0);
         $own = $pdo->prepare(
-            'SELECT * FROM activities WHERE id = :id AND scope = "personal" AND created_by = :u LIMIT 1'
+            'SELECT id, title FROM activities WHERE id = :id AND scope = "personal" AND created_by = :u LIMIT 1'
         );
         $own->execute([':id'=>$del_id, ':u'=>$uid]);
         $row = $own->fetch();

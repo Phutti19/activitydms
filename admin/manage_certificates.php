@@ -25,7 +25,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             flash_set('error', 'กรุณาเลือกกิจกรรมและผู้รับเกียรติบัตร');
         } else {
             $act = $pdo->prepare(
-                'SELECT id, title FROM activities WHERE id = :id AND scope = "organization" LIMIT 1'
+                'SELECT id FROM activities WHERE id = :id AND scope = "organization" LIMIT 1'
             );
             $act->execute([':id' => $cert_activity_id]);
             $activity_row = $act->fetch();

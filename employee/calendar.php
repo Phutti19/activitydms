@@ -40,7 +40,7 @@ $app_url_safe = htmlspecialchars(APP_URL, ENT_QUOTES, 'UTF-8');
     <div id="calTooltipContent"></div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.js"></script>
+<script src="<?= htmlspecialchars(APP_URL, ENT_QUOTES, 'UTF-8') ?>/assets/vendor/fullcalendar/index.global.min.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function () {
     var calEl = document.getElementById('calendar');

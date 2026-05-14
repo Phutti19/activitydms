@@ -202,7 +202,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             exit;
         }
         $pdo = db();
-        $old = $pdo->prepare('SELECT * FROM users WHERE id=:id');
+        $old = $pdo->prepare('SELECT id, is_active, username FROM users WHERE id=:id');
         $old->execute([':id'=>$id]);
         $old_row = $old->fetch();
         if ($old_row) {

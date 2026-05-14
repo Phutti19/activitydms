@@ -622,15 +622,6 @@ a > .card:hover,
     .app-main { padding: 12px; }
 }
 
-/* ===== Empty state ===== */
-.empty-state {
-    padding: 48px 16px;
-    text-align: center;
-    color: var(--color-text-muted);
-}
-.empty-state i { font-size: 48px; opacity: 0.25; display: block; margin-bottom: 12px; }
-.empty-state p { margin: 0; font-size: 14px; }
-
 /* ===== Activity/content card hover ===== */
 .card-hover {
     transition: box-shadow 0.15s, transform 0.15s;
