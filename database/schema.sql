@@ -284,7 +284,7 @@ INSERT INTO `notification_settings` (`setting_key`, `setting_value`, `label`) VA
 -- All must_change_password = 1 (force reset on first login)
 INSERT INTO `users` (`staff_code`,`username`,`password_hash`,`prefix_name`,`first_name`,`last_name`,`position_name`,`staff_type`,`email`,`department_id`,`role`,`is_active`,`must_change_password`) VALUES
   ('SYSTEM','admin','$2b$10$SJHahaCFPGSb1/cowyDsoOje3Q8YZv72SNBq1p4qJTjtduzohRbhy','','ผู้ดูแล','ระบบ','System Administrator','ระบบ','admin@skru.ac.th',2,'admin',1,1),
-  ('DIR001','director','$2b$10$S6dzpmZ1rJYL1mzlsSgEEeVZObqozgu2mdzUSTuCO0AZlFAHrZEDm','','ผู้อำนวยการ','สำนัก','ผู้อำนวยการ','ผู้บริหาร','director@skru.ac.th',1,'director',1,1)
+  ('DIR001','director','$2b$10$S6dzpmZ1rJYL1mzlsSgEEeVZObqozgu2mdzUSTuCO0AZlFAHrZEDm','','ผู้อำนวยการ','สำนัก','ผู้อำนวยการ','ผู้บริหาร','director@skru.ac.th',1,'director',1,1);
 
 SET FOREIGN_KEY_CHECKS = 1;
 -- End of database.sql

@@ -28,19 +28,15 @@ ServerSignature Off
 RedirectMatch 404 ^/uploads(/|$)
 
 # Block direct access to non-public folders
-<DirectoryMatch "^.*/(database|docs|design|cron|includes|config|templates|storage|vendor)(/|$)">
-    Require all denied
-</DirectoryMatch>
+# (DirectoryMatch ใช้ใน .htaccess ไม่ได้ — ใส่ .htaccess แยกในแต่ละ subfolder
+#  database/, docs/, design/, cron/, includes/, config/, templates/, storage/, vendor/
+#  เพื่อไม่ให้ทับ assets/vendor/ ของ frontend)
+RedirectMatch 404 (?i)/(\.git|\.svn)(/|$)
 
 # Protect hidden directories and files
 <FilesMatch "^\.">
     Require all denied
 </FilesMatch>
-
-# Protect .git, .svn
-<DirectoryMatch "(\.git|\.svn)">
-    Require all denied
-</DirectoryMatch>
 
 # PHP hardening
 <IfModule mod_php8.c>
