@@ -880,10 +880,10 @@ require __DIR__ . '/../includes/header.php';
                     <div class="col-12 col-md-6">
                         <label for="fStartDate" class="form-label fw-medium">วันเวลาเริ่ม <span class="text-danger">*</span></label>
                         <div class="row g-1">
-                            <div class="col-7">
+                            <div class="col-12 col-sm-7">
                                 <input type="date" id="fStartDate" name="start_date" class="form-control" required>
                             </div>
-                            <div class="col-5">
+                            <div class="col-12 col-sm-5">
                                 <div class="time-pill">
                                     <i class="bi bi-clock"></i>
                                     <select id="fStartHour" name="start_hour" class="time-pill-select" required aria-label="ชั่วโมงเริ่ม">
@@ -906,10 +906,10 @@ require __DIR__ . '/../includes/header.php';
                     <div class="col-12 col-md-6">
                         <label for="fEndDate" class="form-label fw-medium">วันเวลาสิ้นสุด <span class="text-danger">*</span></label>
                         <div class="row g-1">
-                            <div class="col-7">
+                            <div class="col-12 col-sm-7">
                                 <input type="date" id="fEndDate" name="end_date" class="form-control" required>
                             </div>
-                            <div class="col-5">
+                            <div class="col-12 col-sm-5">
                                 <div class="time-pill">
                                     <i class="bi bi-clock"></i>
                                     <select id="fEndHour" name="end_hour" class="time-pill-select" required aria-label="ชั่วโมงสิ้นสุด">

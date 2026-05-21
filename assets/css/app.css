@@ -769,7 +769,9 @@ a > .card:hover,
     -moz-appearance: none;
     background-image: none;
     flex: 1 1 auto;
-    min-width: 0;
+    /* min-width ต้องกว้างพอให้ native dropdown popup แสดงเลข 2 หลัก + ขอบ
+       ไม่งั้นบนมือถือเลข option จะถูกตัดเป็น "0..." */
+    min-width: 2.75rem;
 }
 .time-pill-select:focus { outline: 0; box-shadow: none; }
 .time-pill-select:invalid { color: #6c757d; }

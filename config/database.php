@@ -1,48 +1,14 @@
 <?php
 declare(strict_types=1);
 
-require_once __DIR__ . '/config.php';
+/**
+ * Database connector — currently routed through the mysqli wrapper.
+ *
+ * The wrapper exposes a PDO-compatible API (db()->prepare()->execute()->fetch())
+ * so the rest of the codebase keeps working unchanged.
+ *
+ * Rollback to native PDO: replace this file with config/database_pdo.php
+ * (or change the require below).
+ */
 
-function db(): PDO
-{
-    static $pdo = null;
-    if ($pdo !== null) {
-        return $pdo;
-    }
-
-    $dsn = sprintf(
-        'mysql:host=%s;port=%s;dbname=%s;charset=%s',
-        $_ENV['DB_HOST'],
-        $_ENV['DB_PORT'],
-        $_ENV['DB_NAME'],
-        $_ENV['DB_CHARSET']
-    );
-
-    // Use the modern Pdo\Mysql constant on PHP 8.4+, fall back to the
-    // legacy PDO::MYSQL_ATTR_INIT_COMMAND on older runtimes. The legacy
-    // constant is deprecated in 8.5 (and the project escalates deprecations
-    // to fatal), while the new class is missing entirely on 8.3 and below.
-    $init_cmd_attr = class_exists('Pdo\\Mysql')
-        ? \Pdo\Mysql::ATTR_INIT_COMMAND
-        : PDO::MYSQL_ATTR_INIT_COMMAND;
-
-    $options = [
-        PDO::ATTR_ERRMODE              => PDO::ERRMODE_EXCEPTION,
-        PDO::ATTR_DEFAULT_FETCH_MODE   => PDO::FETCH_ASSOC,
-        PDO::ATTR_EMULATE_PREPARES     => false,  // native prepared statements
-        $init_cmd_attr                 => "SET NAMES " . $_ENV['DB_CHARSET'] . " COLLATE utf8mb4_unicode_ci",
-    ];
-
-    try {
-        $pdo = new PDO($dsn, $_ENV['DB_USER'], $_ENV['DB_PASSWORD'], $options);
-    } catch (PDOException $e) {
-        if (APP_DEBUG) {
-            throw $e;
-        }
-        error_log('[DB] Connection failed: ' . $e->getMessage());
-        http_response_code(500);
-        exit('Service temporarily unavailable.');
-    }
-
-    return $pdo;
-}
+require_once __DIR__ . '/database_mysqli.php';

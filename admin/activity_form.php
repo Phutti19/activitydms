@@ -288,11 +288,11 @@ require __DIR__ . '/../includes/header.php';
                     เริ่มต้น <span class="text-danger">*</span>
                 </label>
                 <div class="row g-1">
-                    <div class="col-7">
+                    <div class="col-12 col-sm-7">
                         <input type="date" id="aStartDate" name="start_date" class="form-control" required
                                value="<?= htmlspecialchars($start_date_val, ENT_QUOTES, 'UTF-8') ?>">
                     </div>
-                    <div class="col-5">
+                    <div class="col-12 col-sm-5">
                         <div class="time-pill">
                             <i class="bi bi-clock"></i>
                             <select name="start_hour" class="time-pill-select" required aria-label="ชั่วโมงเริ่ม">
@@ -317,11 +317,11 @@ require __DIR__ . '/../includes/header.php';
                     สิ้นสุด <span class="text-danger">*</span>
                 </label>
                 <div class="row g-1">
-                    <div class="col-7">
+                    <div class="col-12 col-sm-7">
                         <input type="date" id="aEndDate" name="end_date" class="form-control" required
                                value="<?= htmlspecialchars($end_date_val, ENT_QUOTES, 'UTF-8') ?>">
                     </div>
-                    <div class="col-5">
+                    <div class="col-12 col-sm-5">
                         <div class="time-pill">
                             <i class="bi bi-clock"></i>
                             <select name="end_hour" class="time-pill-select" required aria-label="ชั่วโมงสิ้นสุด">
