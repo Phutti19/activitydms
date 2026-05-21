@@ -206,7 +206,11 @@ php -S localhost:8000  # ทดสอบ local
 
 **Cron:**
 ```cron
+# ส่งอีเมล queue ทุก 5 นาที
 */5 * * * * /usr/bin/php /path/activitydms/cron/send_emails.php >> /var/log/activitydms-mail.log 2>&1
+
+# ล้างข้อมูล log/queue เก่า วันละ 1 ครั้ง ตี 3 (retention: sent=90d, failed=180d, read-notif=180d, audit=3y)
+0 3 * * * /usr/bin/php /path/activitydms/cron/cleanup_logs.php >> /var/log/activitydms-cleanup.log 2>&1
 ```
 
 **Test accounts (dev เท่านั้น — ห้าม commit ขึ้น production):**

@@ -8,7 +8,7 @@ SET FOREIGN_KEY_CHECKS = 0;
 CREATE TABLE IF NOT EXISTS `departments` (
   `id`         TINYINT UNSIGNED NOT NULL AUTO_INCREMENT,
   `name`       VARCHAR(150)     NOT NULL,
-  `created_at` TIMESTAMP        NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `created_at` DATETIME         NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   COMMENT='แผนก/กลุ่มงานภายในองค์กร seed จาก STAFF_ARIT.xlsx (3 แผนก)';
@@ -28,8 +28,8 @@ CREATE TABLE IF NOT EXISTS `users` (
   `role`                 ENUM('admin','director','employee') NOT NULL DEFAULT 'employee' COMMENT 'admin=ผู้ดูแลระบบ, director=ผู้อำนวยการ(read-only), employee=พนักงาน',
   `is_active`            TINYINT(1)       NOT NULL DEFAULT 1   COMMENT '1=ใช้งานได้ 0=ระงับบัญชี',
   `must_change_password` TINYINT(1)       NOT NULL DEFAULT 1   COMMENT '1=บังคับเปลี่ยน password ครั้งแรก login',
-  `created_at`           TIMESTAMP        NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  `updated_at`           TIMESTAMP        NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `created_at`           DATETIME         NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at`           DATETIME         NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   UNIQUE KEY `uq_username` (`username`),
   UNIQUE KEY `uq_email`    (`email`),
@@ -46,7 +46,7 @@ CREATE TABLE IF NOT EXISTS `fiscal_years` (
   `end_month`   TINYINT UNSIGNED  NOT NULL DEFAULT 9  COMMENT 'เดือนสิ้นสุด (1-12) default=9 กันยายน',
   `end_year`    YEAR              NOT NULL             COMMENT 'ปี ค.ศ. ที่สิ้นสุด (UI แสดงเป็น พ.ศ. — DB เก็บ ค.ศ. เพราะ MySQL YEAR รองรับ 1901–2155)',
   `is_active`   TINYINT(1)        NOT NULL DEFAULT 1   COMMENT '1=ปีงบประมาณที่ใช้งานอยู่ปัจจุบัน (ควรมีแค่ 1 record ที่ active)',
-  `created_at`  TIMESTAMP         NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `created_at`  DATETIME          NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   COMMENT='ปีงบประมาณ ใช้จัดกลุ่มกิจกรรมและกรองรายงาน — Admin ตั้งค่าเดือนเริ่ม/จบเองได้';
@@ -74,8 +74,8 @@ CREATE TABLE IF NOT EXISTS `activities` (
   `end_datetime`         DATETIME         NOT NULL             COMMENT 'วันเวลาสิ้นสุดกิจกรรม',
   `external_url`         VARCHAR(500)              DEFAULT NULL COMMENT 'ลิงก์ภายนอก เช่น Google Meet / เว็บไซต์งาน',
   `created_by`           INT UNSIGNED     NOT NULL             COMMENT 'FK → users.id ผู้สร้างกิจกรรม',
-  `created_at`           TIMESTAMP        NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  `updated_at`           TIMESTAMP        NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `created_at`           DATETIME         NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at`           DATETIME         NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   KEY `idx_type`        (`activity_type_id`),
   KEY `idx_fiscal_year` (`fiscal_year_id`),
@@ -92,7 +92,7 @@ CREATE TABLE IF NOT EXISTS `activity_photos` (
   `original_name` VARCHAR(255)          DEFAULT NULL COMMENT 'ชื่อไฟล์ต้นฉบับ — ใช้เมื่อ source=upload',
   `drive_url`     VARCHAR(500)          DEFAULT NULL COMMENT 'URL Google Drive — ใช้เมื่อ source=drive_link',
   `sort_order`    TINYINT UNSIGNED NOT NULL DEFAULT 1 COMMENT 'ลำดับภาพ — upload จำกัด 1-5, drive_link แค่ลำดับการแสดงผล',
-  `created_at`    TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `created_at`    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   KEY `idx_activity` (`activity_id`),
   CONSTRAINT `chk_photos_source` CHECK (
@@ -110,7 +110,7 @@ CREATE TABLE IF NOT EXISTS `activity_attachments` (
   `label`       VARCHAR(255) NOT NULL DEFAULT ''  COMMENT 'ชื่อที่แสดง เช่น "สไลด์การอบรม" / "รายงานการประชุม"',
   `filename`    VARCHAR(255)          DEFAULT NULL COMMENT 'ชื่อไฟล์ที่เก็บจริง (UUID) — ใช้เมื่อ type=file',
   `url`         VARCHAR(500)          DEFAULT NULL COMMENT 'URL ภายนอก — ใช้เมื่อ type=url',
-  `created_at`  TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `created_at`  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   KEY `idx_activity` (`activity_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
@@ -121,7 +121,7 @@ CREATE TABLE IF NOT EXISTS `activity_registrations` (
   `activity_id`     INT UNSIGNED NOT NULL             COMMENT 'FK → activities.id (CASCADE DELETE)',
   `user_id`         INT UNSIGNED NOT NULL             COMMENT 'FK → users.id ผู้เข้าร่วม (CASCADE DELETE)',
   `status`          ENUM('registered','attended','absent') NOT NULL DEFAULT 'attended' COMMENT 'Hybrid mode: default=attended (admin mark absent เฉพาะ exception) | registered=รอเช็ค (legacy, ไม่ใช้แล้วแต่เก็บไว้) | absent=ไม่เข้าร่วม',
-  `registered_at`   TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT 'วันเวลาที่เข้าร่วม/ถูกเพิ่ม',
+  `registered_at`   DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT 'วันเวลาที่เข้าร่วม/ถูกเพิ่ม',
   `checked_by`      INT UNSIGNED          DEFAULT NULL COMMENT 'FK → users.id Admin ที่เช็คชื่อ (NULL=self-register โดยพนักงาน, สามารถยกเลิกเข้าร่วมเองได้)',
   `checked_at`      DATETIME              DEFAULT NULL COMMENT 'วันเวลาที่เช็คชื่อ',
   PRIMARY KEY (`id`),
@@ -140,7 +140,7 @@ CREATE TABLE IF NOT EXISTS `documents` (
   `file_size`     INT UNSIGNED NOT NULL DEFAULT 0   COMMENT 'ขนาดไฟล์ (bytes)',
   `mime_type`     VARCHAR(100) NOT NULL DEFAULT ''  COMMENT 'MIME type จริงจาก finfo_file() เช่น application/pdf',
   `uploaded_by`   INT UNSIGNED NOT NULL             COMMENT 'FK → users.id ผู้อัปโหลด',
-  `created_at`    TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `created_at`    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   KEY `idx_activity` (`activity_id`),
   KEY `idx_uploader` (`uploaded_by`)
@@ -154,7 +154,7 @@ CREATE TABLE IF NOT EXISTS `certificates` (
   `filename`      VARCHAR(255) NOT NULL COMMENT 'ชื่อไฟล์ที่เก็บจริง (UUID) รองรับ PDF / JPG / PNG',
   `original_name` VARCHAR(255) NOT NULL COMMENT 'ชื่อไฟล์ต้นฉบับ ใช้ตอน download',
   `uploaded_by`   INT UNSIGNED NOT NULL COMMENT 'FK → users.id ผู้อัปโหลด (Admin สำหรับ org / เจ้าของกิจกรรมเองสำหรับ personal)',
-  `created_at`    TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `created_at`    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   UNIQUE KEY `uq_cert` (`activity_id`, `user_id`) COMMENT '1 คน รับได้ 1 ใบต่อกิจกรรม',
   KEY `idx_user` (`user_id`)
@@ -173,7 +173,7 @@ CREATE TABLE IF NOT EXISTS `email_queue` (
   `trigger_key`  VARCHAR(50)       DEFAULT NULL    COMMENT 'ชื่อ trigger ที่ enqueue เช่น notify_new_activity ใช้คำนวณ rate limit ต่อ trigger',
   `scheduled_at` DATETIME NOT NULL DEFAULT (NOW()) COMMENT 'เวลาที่ต้องการส่ง — cron จะดึงเฉพาะ record ที่ scheduled_at <= NOW()',
   `sent_at`      DATETIME          DEFAULT NULL    COMMENT 'วันเวลาที่ส่งสำเร็จจริง',
-  `created_at`   TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `created_at`   DATETIME  NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   KEY `idx_status_scheduled` (`status`, `scheduled_at`) COMMENT 'Index หลักที่ cron ใช้ดึง pending emails',
   KEY `idx_trigger_created`  (`trigger_key`, `created_at`) COMMENT 'ใช้ใน rate limit ต่อ trigger (≤50/ชั่วโมง)'
@@ -185,7 +185,7 @@ CREATE TABLE IF NOT EXISTS `email_logs` (
   `queue_id`      INT UNSIGNED NOT NULL COMMENT 'FK → email_queue.id (CASCADE DELETE)',
   `status`        ENUM('success','failed') NOT NULL COMMENT 'ผลการส่งแต่ละครั้ง',
   `error_message` TEXT          DEFAULT NULL COMMENT 'ข้อผิดพลาดจาก PHPMailer (เก็บไว้ debug)',
-  `attempt_at`    TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT 'เวลาที่พยายามส่ง',
+  `attempt_at`    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT 'เวลาที่พยายามส่ง',
   PRIMARY KEY (`id`),
   KEY `idx_queue` (`queue_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
@@ -196,7 +196,7 @@ CREATE TABLE IF NOT EXISTS `notification_settings` (
   `setting_key`   VARCHAR(100)     NOT NULL             COMMENT 'ชื่อ key เช่น notify_new_activity / notify_new_certificate',
   `setting_value` VARCHAR(255)     NOT NULL DEFAULT '1' COMMENT '1=เปิด 0=ปิด (Admin เปลี่ยนได้ในหน้า settings)',
   `label`         VARCHAR(255)     NOT NULL DEFAULT ''  COMMENT 'ข้อความอธิบายสำหรับแสดงในหน้า settings',
-  `updated_at`    TIMESTAMP        NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `updated_at`    DATETIME         NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   UNIQUE KEY `uq_key` (`setting_key`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
@@ -212,7 +212,7 @@ CREATE TABLE IF NOT EXISTS `notifications` (
   `ref_type`   VARCHAR(50)              DEFAULT NULL COMMENT 'ประเภท ref เช่น activity / certificate',
   `ref_id`     INT UNSIGNED             DEFAULT NULL COMMENT 'ID ของ ref (loose — ไม่ผูก FK)',
   `is_read`    TINYINT(1)       NOT NULL DEFAULT 0   COMMENT '1=อ่านแล้ว 0=ยังไม่อ่าน',
-  `created_at` TIMESTAMP        NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `created_at` DATETIME         NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `read_at`    DATETIME                  DEFAULT NULL,
   PRIMARY KEY (`id`),
   KEY `idx_user_unread` (`user_id`, `is_read`, `created_at`) COMMENT 'ใช้ดึง unread + count badge ใน bell'
@@ -228,7 +228,7 @@ CREATE TABLE IF NOT EXISTS `audit_logs` (
   `old_values` JSON             DEFAULT NULL COMMENT 'ข้อมูลก่อนแก้ไข (JSON) — ใช้ตรวจสอบย้อนหลัง',
   `new_values` JSON             DEFAULT NULL COMMENT 'ข้อมูลหลังแก้ไข (JSON)',
   `ip_address` VARCHAR(45)     NOT NULL DEFAULT '' COMMENT 'IP ผู้ใช้งาน (รองรับ IPv6)',
-  `created_at` TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `created_at` DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   KEY `idx_user`   (`user_id`),
   KEY `idx_action` (`action`),
