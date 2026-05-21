@@ -225,9 +225,22 @@ php -S localhost:8000  # ทดสอบ local
 
 ทำตามลำดับ phase 1 → 12 (ดูสเปคข้อ 10) — อย่ากระโดดข้าม phase
 
-ตอนนี้สถานะ:
-- ✅ Phase 1: Schema + seed STAFF_ARIT (`database/schema.sql` พร้อมแล้ว)
-- ⏭️ Phase 2: Login + auth + role guard ← **เริ่มที่นี่**
+ตอนนี้สถานะ: **✅ Phase 1–12: Complete** — อยู่ระหว่าง UAT / testing (commit ล่าสุด `81e42bc xamp test`)
+
+- ✅ Phase 1: Schema + seed STAFF_ARIT (`database/schema.sql`)
+- ✅ Phase 2: Login + auth + role guard (`includes/auth.php`, `index.php`, `change_password.php`)
+- ✅ Phase 3: Admin user/fiscal/activity-type management (`admin/manage_users.php`, `manage_fiscal_year.php`, `manage_activity_types.php`)
+- ✅ Phase 4: Activity CRUD + photos/attachments (`admin/manage_activities.php`, `activity_form.php`, `api/activity_upload_photo.php`)
+- ✅ Phase 5: Registration + check-in + certificates upload (`admin/manage_certificates.php`, `manage_documents.php`)
+- ✅ Phase 6: Email queue + notification settings (`cron/send_emails.php`, `admin/notification_settings.php`, `api/notifications.php`)
+- ✅ Phase 7: Employee views (`employee/dashboard.php`, `my_activities.php`, `my_certificates.php`, `documents.php`, `personal_activities.php`)
+- ✅ Phase 8: Open registration flow (`employee/available_activities.php`)
+- ✅ Phase 9: Reports + Calendar (`*/reports.php`, `*/calendar.php`, `api/calendar_events.php`)
+- ✅ Phase 10: Director read-only views (`director/dashboard.php`, `activities.php`, `activity_view.php`, `reports.php`, `calendar.php`)
+- ✅ Phase 11: Mobile UI polish
+- ✅ Phase 12: Hardening & UAT (`.htaccess` security headers, login rate limit, `includes/error_handler.php`, `errors/{403,404,500}.php`)
+
+> รายละเอียดสิ่งที่ทำในแต่ละ phase: ดู `docs/Phase6-12_Summary.md`
 
 ---
 
