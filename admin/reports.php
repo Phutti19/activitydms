@@ -251,17 +251,6 @@ $months_th = [1=>'มกราคม',2=>'กุมภาพันธ์',3=>'�
 // ---------------------------------------------------------------------------
 // Helper
 // ---------------------------------------------------------------------------
-function rpt_fmt_date(string $dt): string {
-    $ts = strtotime($dt);
-    $m  = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
-    return date('j', $ts) . ' ' . $m[(int)date('n', $ts)-1] . ' ' . (date('Y', $ts)+543);
-}
-
-function rpt_ym_th(string $ym): string {
-    [$y, $m] = explode('-', $ym);
-    $months = ['','ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
-    return $months[(int)$m] . ' ' . ((int)$y + 543);
-}
 
 // Filter summary for PDF header
 $filter_parts = [];
@@ -287,12 +276,12 @@ if ($user_info) {
 }
 $filter_summary = empty($filter_parts) ? 'ทั้งหมด' : implode(' · ', $filter_parts);
 
-$gen_dt = rpt_fmt_date(date('Y-m-d H:i:s')) . ' เวลา ' . date('H:i') . ' น.';
+$gen_dt = report_gen_datetime();
 
 $page_title  = 'รายงานสรุป';
 $page_active = 'reports';
 require __DIR__ . '/../includes/header.php';
-$app_url_safe = htmlspecialchars(APP_URL, ENT_QUOTES, 'UTF-8');
+$app_url_safe = h(APP_URL);
 ?>
 
 <div class="page-header d-flex flex-wrap align-items-center justify-content-between gap-2">
@@ -304,11 +293,11 @@ $app_url_safe = htmlspecialchars(APP_URL, ENT_QUOTES, 'UTF-8');
 
 <!-- Print-only header -->
 <div class="print-only print-header">
-    <div class="org-name">สำนักวิทยบริการและเทคโนโลยีสารสนเทศ (ARIT)</div>
+    <div class="org-name"><?= h(ORG_FULL_NAME) ?></div>
     <div class="report-title">รายงานสรุปกิจกรรม</div>
     <div class="meta">
-        ตัวกรอง: <?= htmlspecialchars($filter_summary, ENT_QUOTES, 'UTF-8') ?>
-        <br>วันที่ออกรายงาน: <?= htmlspecialchars($gen_dt, ENT_QUOTES, 'UTF-8') ?>
+        ตัวกรอง: <?= h($filter_summary) ?>
+        <br>วันที่ออกรายงาน: <?= h($gen_dt) ?>
     </div>
 </div>
 
@@ -326,7 +315,7 @@ $app_url_safe = htmlspecialchars(APP_URL, ENT_QUOTES, 'UTF-8');
                 <option value="0">ทุกปี</option>
                 <?php foreach ($years as $y): ?>
                 <option value="<?= (int)$y['id'] ?>" <?= $f_fiscal===(int)$y['id']?'selected':'' ?>>
-                    <?= htmlspecialchars($y['name'], ENT_QUOTES, 'UTF-8') ?>
+                    <?= h($y['name']) ?>
                 </option>
                 <?php endforeach; ?>
             </select>
@@ -339,7 +328,7 @@ $app_url_safe = htmlspecialchars(APP_URL, ENT_QUOTES, 'UTF-8');
                 <option value="0">ทุกประเภท</option>
                 <?php foreach ($types as $t): ?>
                 <option value="<?= (int)$t['id'] ?>" <?= $f_type===(int)$t['id']?'selected':'' ?>>
-                    <?= htmlspecialchars($t['name'], ENT_QUOTES, 'UTF-8') ?>
+                    <?= h($t['name']) ?>
                 </option>
                 <?php endforeach; ?>
             </select>
@@ -400,8 +389,8 @@ $app_url_safe = htmlspecialchars(APP_URL, ENT_QUOTES, 'UTF-8');
                 <option value="0">— ทั้งหมด (รวมทุกคน) —</option>
                 <?php foreach ($users_list as $u): ?>
                 <option value="<?= (int)$u['id'] ?>" <?= $f_user===(int)$u['id']?'selected':'' ?>>
-                    <?= htmlspecialchars($u['fullname'], ENT_QUOTES, 'UTF-8') ?>
-                    <?php if (!empty($u['dept_name'])): ?> · <?= htmlspecialchars($u['dept_name'], ENT_QUOTES, 'UTF-8') ?><?php endif; ?>
+                    <?= h($u['fullname']) ?>
+                    <?php if (!empty($u['dept_name'])): ?> · <?= h($u['dept_name']) ?><?php endif; ?>
                 </option>
                 <?php endforeach; ?>
             </select>
@@ -425,6 +414,7 @@ $app_url_safe = htmlspecialchars(APP_URL, ENT_QUOTES, 'UTF-8');
 // Quarter shortcuts — set smonth/emonth ตามไตรมาสของปีงบประมาณไทย
 (function () {
     const Q = { 1: [10,12], 2: [1,3], 3: [4,6], 4: [7,9], 0: [0,0] };
+    const form = document.querySelector('form[data-autofilter]');
     document.querySelectorAll('[data-quarter-shortcuts] [data-q]').forEach(btn => {
         btn.addEventListener('click', () => {
             const [s, e] = Q[btn.dataset.q] || [0,0];
@@ -432,6 +422,11 @@ $app_url_safe = htmlspecialchars(APP_URL, ENT_QUOTES, 'UTF-8');
             const eSel = document.querySelector('select[name="emonth"]');
             if (sSel) sSel.value = String(s);
             if (eSel) eSel.value = String(e);
+            // กดไตรมาสแล้วกรองทันที (การเซ็ต .value เองไม่ทริกเกอร์ auto-submit)
+            if (form) {
+                if (typeof form.requestSubmit === 'function') form.requestSubmit();
+                else form.submit();
+            }
         });
     });
 })();
@@ -492,7 +487,7 @@ $app_url_safe = htmlspecialchars(APP_URL, ENT_QUOTES, 'UTF-8');
                     $mo_color = $mo_rate >= 80 ? 'success' : ($mo_rate >= 60 ? 'warning' : 'danger');
                 ?>
                 <tr>
-                    <td><?= htmlspecialchars(rpt_ym_th((string)$mo['ym']), ENT_QUOTES, 'UTF-8') ?></td>
+                    <td><?= h(th_month_year((string)$mo['ym'])) ?></td>
                     <td class="text-center"><?= (int)$mo['act_count'] ?></td>
                     <td class="text-center"><?= (int)$mo['reg_count'] ?></td>
                     <td class="text-center"><?= (int)$mo['attended'] ?></td>
@@ -533,7 +528,7 @@ $app_url_safe = htmlspecialchars(APP_URL, ENT_QUOTES, 'UTF-8');
                 ?>
                 <tr>
                     <td class="fw-medium">
-                        <?= htmlspecialchars($dr['dept_name'], ENT_QUOTES, 'UTF-8') ?>
+                        <?= h($dr['dept_name']) ?>
                     </td>
                     <td class="text-center"><?= (int)$dr['member_count'] ?></td>
                     <td class="text-center"><?= (int)$dr['reg_count'] ?></td>
@@ -560,10 +555,10 @@ $app_url_safe = htmlspecialchars(APP_URL, ENT_QUOTES, 'UTF-8');
         <div>
             <span class="fw-semibold">
                 <i class="bi bi-person-badge me-1"></i>
-                ประวัติเข้าร่วม: <?= htmlspecialchars($user_info['fullname'], ENT_QUOTES, 'UTF-8') ?>
+                ประวัติเข้าร่วม: <?= h($user_info['fullname']) ?>
             </span>
             <?php if (!empty($user_info['dept_name'])): ?>
-                <span class="text-muted small">· <?= htmlspecialchars($user_info['dept_name'], ENT_QUOTES, 'UTF-8') ?></span>
+                <span class="text-muted small">· <?= h($user_info['dept_name']) ?></span>
             <?php endif; ?>
         </div>
         <div class="d-flex flex-wrap gap-3 small">
@@ -605,11 +600,11 @@ $app_url_safe = htmlspecialchars(APP_URL, ENT_QUOTES, 'UTF-8');
                     <td data-label="กิจกรรม">
                         <a href="<?= $app_url_safe ?>/admin/activity_view.php?id=<?= (int)$ur['id'] ?>"
                            class="fw-medium text-decoration-none">
-                            <?= htmlspecialchars($ur['title'], ENT_QUOTES, 'UTF-8') ?>
+                            <?= h($ur['title']) ?>
                         </a>
                         <div class="small">
-                            <span class="badge" style="background:<?= htmlspecialchars($u_color, ENT_QUOTES, 'UTF-8') ?>;">
-                                <?= htmlspecialchars($ur['type_name'] ?? '—', ENT_QUOTES, 'UTF-8') ?>
+                            <span class="badge" style="background:<?= h($u_color) ?>;">
+                                <?= h($ur['type_name'] ?? '—') ?>
                             </span>
                             <?php if (($ur['format'] ?? 'onsite') === 'online'): ?>
                                 <span class="badge-pill" style="background:#E0F2FE;color:#0369A1;">
@@ -617,15 +612,15 @@ $app_url_safe = htmlspecialchars(APP_URL, ENT_QUOTES, 'UTF-8');
                                 </span>
                             <?php endif; ?>
                             <?php if (!empty($ur['location'])): ?>
-                                <span class="text-muted">· <?= htmlspecialchars($ur['location'], ENT_QUOTES, 'UTF-8') ?></span>
+                                <span class="text-muted">· <?= h($ur['location']) ?></span>
                             <?php endif; ?>
                         </div>
                     </td>
                     <td data-label="วันที่" class="small text-nowrap">
-                        <?= htmlspecialchars(rpt_fmt_date($ur['start_datetime']), ENT_QUOTES, 'UTF-8') ?>
+                        <?= h(th_date($ur['start_datetime'])) ?>
                     </td>
                     <td data-label="สถานะ" class="text-center">
-                        <span class="badge bg-<?= $st[0] ?>"><?= htmlspecialchars($st[1], ENT_QUOTES, 'UTF-8') ?></span>
+                        <span class="badge bg-<?= $st[0] ?>"><?= h($st[1]) ?></span>
                     </td>
                     <td data-label="เกียรติบัตร" class="text-center">
                         <?php if (!empty($ur['cert_id'])): ?>
@@ -675,22 +670,22 @@ $app_url_safe = htmlspecialchars(APP_URL, ENT_QUOTES, 'UTF-8');
                     <td data-label="กิจกรรม">
                         <a href="<?= $app_url_safe ?>/admin/activity_view.php?id=<?= (int)$a['id'] ?>"
                            class="fw-medium text-decoration-none">
-                            <?= htmlspecialchars($a['title'], ENT_QUOTES, 'UTF-8') ?>
+                            <?= h($a['title']) ?>
                         </a>
                         <div class="small">
                             <span class="badge"
-                                  style="background:<?= htmlspecialchars($color, ENT_QUOTES, 'UTF-8') ?>;">
-                                <?= htmlspecialchars($a['type_name'] ?? '—', ENT_QUOTES, 'UTF-8') ?>
+                                  style="background:<?= h($color) ?>;">
+                                <?= h($a['type_name'] ?? '—') ?>
                             </span>
                             <?php if (!empty($a['location'])): ?>
                             <span class="text-muted">
-                                · <?= htmlspecialchars($a['location'], ENT_QUOTES, 'UTF-8') ?>
+                                · <?= h($a['location']) ?>
                             </span>
                             <?php endif; ?>
                         </div>
                     </td>
                     <td data-label="วันที่" class="small text-muted text-nowrap">
-                        <?= htmlspecialchars(rpt_fmt_date($a['start_datetime']), ENT_QUOTES, 'UTF-8') ?>
+                        <?= h(th_date($a['start_datetime'])) ?>
                     </td>
                     <td data-label="ผู้เข้าร่วม" class="text-center">
                         <?= (int)$a['reg_total'] ?>

@@ -61,23 +61,8 @@ $years = $years_stmt->fetchAll();
 
 $has_filter = ($q !== '' || $f_status !== '' || $f_time !== '' || $f_type > 0 || $f_fiscal > 0);
 
-function emp_time_status(array $a): array {
-    $now = time();
-    $s = strtotime((string)$a['start_datetime']);
-    $e = strtotime((string)$a['end_datetime']);
-    if ($e < $now)  return ['label'=>'เสร็จสิ้น',        'bg'=>'#D1FAE5','fg'=>'#065F46'];
-    if ($s <= $now) return ['label'=>'กำลังดำเนินอยู่',  'bg'=>'#FEF3C7','fg'=>'#92400E'];
-    return                 ['label'=>'กำลังจะมาถึง',     'bg'=>'#DBEAFE','fg'=>'#1E40AF'];
-}
 
-function emp_fmt_date(string $dt): string {
-    $ts = strtotime($dt);
-    $m  = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
-    return date('j', $ts) . ' ' . $m[(int)date('n', $ts)-1] . ' ' . (date('Y', $ts)+543) . ', ' . date('H:i', $ts);
-}
 
-$reg_label = ['registered'=>'ยืนยันเข้าร่วม','attended'=>'เข้าร่วมแล้ว','absent'=>'ไม่เข้าร่วม'];
-$reg_badge = ['registered'=>'secondary','attended'=>'success','absent'=>'danger'];
 
 $page_title  = 'กิจกรรมของฉัน';
 $page_active = 'my_activities';
@@ -91,14 +76,14 @@ require __DIR__ . '/../includes/header.php';
     </div>
 </div>
 
-<form method="GET" class="card p-3 mb-3">
+<form method="GET" class="card p-3 mb-3" data-autofilter>
     <div class="row g-2 align-items-end">
         <div class="col-12 col-md-6 col-lg-3">
             <label class="form-label small text-muted mb-1">
                 <i class="bi bi-search"></i> ค้นหา
             </label>
             <input type="text" name="q" class="form-control" placeholder="ชื่อ / สถานที่ / รายละเอียด"
-                   value="<?= htmlspecialchars($q, ENT_QUOTES, 'UTF-8') ?>">
+                   value="<?= h($q) ?>">
         </div>
         <div class="col-6 col-md-3 col-lg-2">
             <label class="form-label small text-muted mb-1">ประเภท</label>
@@ -106,7 +91,7 @@ require __DIR__ . '/../includes/header.php';
                 <option value="0">— ทั้งหมด —</option>
                 <?php foreach ($types as $t): ?>
                 <option value="<?= (int)$t['id'] ?>" <?= $f_type === (int)$t['id'] ? 'selected' : '' ?>>
-                    <?= htmlspecialchars($t['name'], ENT_QUOTES, 'UTF-8') ?>
+                    <?= h($t['name']) ?>
                 </option>
                 <?php endforeach; ?>
             </select>
@@ -117,7 +102,7 @@ require __DIR__ . '/../includes/header.php';
                 <option value="0">— ทั้งหมด —</option>
                 <?php foreach ($years as $y): ?>
                 <option value="<?= (int)$y['id'] ?>" <?= $f_fiscal === (int)$y['id'] ? 'selected' : '' ?>>
-                    <?= htmlspecialchars($y['name'], ENT_QUOTES, 'UTF-8') ?>
+                    <?= h($y['name']) ?>
                 </option>
                 <?php endforeach; ?>
             </select>
@@ -145,7 +130,7 @@ require __DIR__ . '/../includes/header.php';
                 <i class="bi bi-search"></i>
             </button>
             <?php if ($has_filter): ?>
-            <a href="<?= htmlspecialchars(APP_URL, ENT_QUOTES, 'UTF-8') ?>/employee/my_activities.php"
+            <a href="<?= h(APP_URL) ?>/employee/my_activities.php"
                class="btn btn-outline-secondary flex-grow-1" title="ล้างตัวกรอง">
                 <i class="bi bi-x-lg"></i>
             </a>
@@ -166,34 +151,34 @@ require __DIR__ . '/../includes/header.php';
 <?php else: ?>
 <div class="row g-3">
 <?php foreach ($activities as $a):
-    $ts   = emp_time_status($a);
+    $ts   = activity_time_status($a);
     $color = preg_match('/^#[0-9a-fA-F]{6}$/', (string)$a['type_color']) ? $a['type_color'] : '#5F5E5A';
     $rs   = (string)$a['reg_status'];
 ?>
 <div class="col-12 col-md-6 col-lg-4">
-    <div class="card h-100" style="border-left: 4px solid <?= htmlspecialchars($color, ENT_QUOTES, 'UTF-8') ?>;">
+    <div class="card h-100" style="border-left: 4px solid <?= h($color) ?>;">
         <div class="card-body d-flex flex-column gap-2">
             <div class="d-flex justify-content-between align-items-start gap-2">
                 <h6 class="fw-semibold mb-0 lh-sm">
-                    <a href="<?= htmlspecialchars(APP_URL, ENT_QUOTES, 'UTF-8') ?>/employee/activity_view.php?id=<?= (int)$a['id'] ?>"
+                    <a href="<?= h(APP_URL) ?>/employee/activity_view.php?id=<?= (int)$a['id'] ?>"
                        class="text-decoration-none text-body stretched-link">
-                        <?= htmlspecialchars($a['title'], ENT_QUOTES, 'UTF-8') ?>
+                        <?= h($a['title']) ?>
                     </a>
                 </h6>
                 <span class="badge"
-                      style="background:<?= htmlspecialchars($color, ENT_QUOTES, 'UTF-8') ?>;white-space:nowrap;flex-shrink:0;">
-                    <?= htmlspecialchars($a['type_name'] ?? '—', ENT_QUOTES, 'UTF-8') ?>
+                      style="background:<?= h($color) ?>;white-space:nowrap;flex-shrink:0;">
+                    <?= h($a['type_name'] ?? '—') ?>
                 </span>
             </div>
             <div class="small text-muted">
                 <i class="bi bi-clock me-1"></i>
-                <?= htmlspecialchars(emp_fmt_date($a['start_datetime']), ENT_QUOTES, 'UTF-8') ?>
-                — <?= htmlspecialchars(emp_fmt_date($a['end_datetime']), ENT_QUOTES, 'UTF-8') ?>
+                <?= h(th_datetime($a['start_datetime'])) ?>
+                — <?= h(th_datetime($a['end_datetime'])) ?>
             </div>
             <?php if (!empty($a['location'])): ?>
             <div class="small text-muted">
                 <i class="bi bi-geo-alt me-1"></i>
-                <?= htmlspecialchars($a['location'], ENT_QUOTES, 'UTF-8') ?>
+                <?= h($a['location']) ?>
             </div>
             <?php endif; ?>
             <div class="mt-auto d-flex align-items-center justify-content-between pt-1">
@@ -202,12 +187,12 @@ require __DIR__ . '/../includes/header.php';
                           style="background:<?= $ts['bg'] ?>;color:<?= $ts['fg'] ?>;font-weight:500;">
                         <?= $ts['label'] ?>
                     </span>
-                    <span class="badge bg-<?= $reg_badge[$rs] ?? 'secondary' ?>">
-                        <?= $reg_label[$rs] ?? htmlspecialchars($rs, ENT_QUOTES, 'UTF-8') ?>
+                    <span class="badge bg-<?= reg_badge($rs) ?>">
+                        <?= h(reg_label($rs)) ?>
                     </span>
                 </div>
                 <?php if (!empty($a['external_url'])): ?>
-                <a href="<?= htmlspecialchars($a['external_url'], ENT_QUOTES, 'UTF-8') ?>"
+                <a href="<?= h($a['external_url']) ?>"
                    class="btn btn-sm btn-outline-secondary" target="_blank" rel="noopener">
                     <i class="bi bi-box-arrow-up-right"></i>
                 </a>

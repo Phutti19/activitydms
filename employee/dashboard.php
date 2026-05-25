@@ -66,24 +66,12 @@ $cert_stmt = $pdo->prepare(
 $cert_stmt->execute([':u' => $uid]);
 $recent_certs = $cert_stmt->fetchAll();
 
-function dash_fmt_date(string $dt): string {
-    $ts = strtotime($dt);
-    $m  = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
-    return date('j', $ts) . ' ' . $m[(int)date('n', $ts)-1] . ' ' . (date('Y', $ts)+543);
-}
-
-function dash_fmt_time(string $dt): string {
-    return date('H:i', strtotime($dt));
-}
-
 $page_title  = 'หน้าหลัก';
 $page_active = 'dashboard';
 require __DIR__ . '/../includes/header.php';
-$app_url_safe = htmlspecialchars(APP_URL, ENT_QUOTES, 'UTF-8');
+$app_url_safe = h(APP_URL);
 
-$thai_months = ['','ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
-$thai_days   = ['อา','จ','อ','พ','พฤ','ศ','ส'];
-$today_label = $thai_days[(int)date('w')] . ' ' . date('j') . ' ' . $thai_months[(int)date('n')] . ' ' . ((int)date('Y') + 543);
+$today_label = th_weekday_date();
 ?>
 
 <!-- Hero greeting -->
@@ -93,10 +81,10 @@ $today_label = $thai_days[(int)date('w')] . ' ' . date('j') . ' ' . $thai_months
         <div class="row align-items-center g-3">
             <div class="col-12 col-md-8">
                 <div class="small opacity-75 mb-1">
-                    <i class="bi bi-calendar3 me-1"></i><?= htmlspecialchars($today_label, ENT_QUOTES, 'UTF-8') ?>
+                    <i class="bi bi-calendar3 me-1"></i><?= h($today_label) ?>
                 </div>
                 <h1 class="h3 fw-bold mb-2">
-                    สวัสดี, <?= htmlspecialchars($_SESSION['display_name'] ?? '', ENT_QUOTES, 'UTF-8') ?>
+                    สวัสดี, <?= h($_SESSION['display_name'] ?? '') ?>
                 </h1>
                 <p class="mb-0 opacity-90">
                     <?php if ($today_count > 0): ?>
@@ -184,15 +172,15 @@ $today_label = $thai_days[(int)date('w')] . ' ' . date('j') . ' ' . $thai_months
             $ongoing = ($s <= $now && $e >= $now);
         ?>
         <li class="list-group-item d-flex align-items-center gap-3 py-3">
-            <div style="width:4px;height:40px;background:<?= htmlspecialchars($color, ENT_QUOTES, 'UTF-8') ?>;border-radius:2px;flex-shrink:0;"></div>
+            <div style="width:4px;height:40px;background:<?= h($color) ?>;border-radius:2px;flex-shrink:0;"></div>
             <div class="flex-grow-1 overflow-hidden">
                 <div class="fw-medium text-truncate">
-                    <?= htmlspecialchars($a['title'], ENT_QUOTES, 'UTF-8') ?>
+                    <?= h($a['title']) ?>
                 </div>
                 <div class="small text-muted">
-                    <i class="bi bi-clock me-1"></i><?= dash_fmt_time($a['start_datetime']) ?>–<?= dash_fmt_time($a['end_datetime']) ?>
+                    <i class="bi bi-clock me-1"></i><?= th_time($a['start_datetime']) ?>–<?= th_time($a['end_datetime']) ?>
                     <?php if (!empty($a['location'])): ?>
-                    · <i class="bi bi-geo-alt me-1"></i><?= htmlspecialchars($a['location'], ENT_QUOTES, 'UTF-8') ?>
+                    · <i class="bi bi-geo-alt me-1"></i><?= h($a['location']) ?>
                     <?php endif; ?>
                 </div>
             </div>
@@ -213,16 +201,16 @@ $today_label = $thai_days[(int)date('w')] . ' ' . date('j') . ' ' . $thai_months
             $color = preg_match('/^#[0-9a-fA-F]{6}$/', (string)$a['type_color']) ? $a['type_color'] : '#5F5E5A';
         ?>
         <li class="list-group-item d-flex align-items-center gap-3 py-3">
-            <div style="width:4px;height:40px;background:<?= htmlspecialchars($color, ENT_QUOTES, 'UTF-8') ?>;border-radius:2px;flex-shrink:0;"></div>
+            <div style="width:4px;height:40px;background:<?= h($color) ?>;border-radius:2px;flex-shrink:0;"></div>
             <div class="flex-grow-1 overflow-hidden">
                 <div class="fw-medium text-truncate">
-                    <?= htmlspecialchars($a['title'], ENT_QUOTES, 'UTF-8') ?>
+                    <?= h($a['title']) ?>
                 </div>
                 <div class="small text-muted">
-                    <i class="bi bi-calendar3 me-1"></i><?= htmlspecialchars(dash_fmt_date($a['start_datetime']), ENT_QUOTES, 'UTF-8') ?>
-                    · <?= dash_fmt_time($a['start_datetime']) ?>
+                    <i class="bi bi-calendar3 me-1"></i><?= h(th_date($a['start_datetime'])) ?>
+                    · <?= th_time($a['start_datetime']) ?>
                     <?php if (!empty($a['location'])): ?>
-                    · <i class="bi bi-geo-alt me-1"></i><?= htmlspecialchars($a['location'], ENT_QUOTES, 'UTF-8') ?>
+                    · <i class="bi bi-geo-alt me-1"></i><?= h($a['location']) ?>
                     <?php endif; ?>
                 </div>
             </div>
@@ -247,11 +235,11 @@ $today_label = $thai_days[(int)date('w')] . ' ' . date('j') . ' ' . $thai_months
             <span style="font-size:24px;">📜</span>
             <div class="flex-grow-1 overflow-hidden">
                 <div class="fw-medium text-truncate">
-                    <?= htmlspecialchars($c['activity_title'], ENT_QUOTES, 'UTF-8') ?>
+                    <?= h($c['activity_title']) ?>
                 </div>
                 <?php $_cts = strtotime((string)$c['created_at']); ?>
                 <div class="small text-muted">
-                    <?= htmlspecialchars(date('d/m/', $_cts) . (date('Y', $_cts) + 543), ENT_QUOTES, 'UTF-8') ?>
+                    <?= h(date('d/m/', $_cts) . (date('Y', $_cts) + 543)) ?>
                 </div>
             </div>
             <a href="<?= $app_url_safe ?>/api/download.php?type=cert&id=<?= (int)$c['id'] ?>"

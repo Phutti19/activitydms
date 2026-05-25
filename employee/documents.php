@@ -57,7 +57,7 @@ function emp_doc_icon(string $mime): string {
 $page_title  = 'เอกสารทั่วไป';
 $page_active = 'documents';
 require __DIR__ . '/../includes/header.php';
-$app_url_safe = htmlspecialchars(APP_URL, ENT_QUOTES, 'UTF-8');
+$app_url_safe = h(APP_URL);
 ?>
 
 <div class="page-header">
@@ -67,14 +67,14 @@ $app_url_safe = htmlspecialchars(APP_URL, ENT_QUOTES, 'UTF-8');
     </div>
 </div>
 
-<form method="GET" class="card p-3 mb-3">
+<form method="GET" class="card p-3 mb-3" data-autofilter>
     <div class="row g-2 align-items-end">
         <div class="col-12 col-md-7 col-lg-8">
             <label class="form-label small text-muted mb-1">
                 <i class="bi bi-search"></i> ค้นหา
             </label>
             <input type="text" name="q" class="form-control" placeholder="ชื่อเอกสาร / ชื่อไฟล์"
-                   value="<?= htmlspecialchars($q, ENT_QUOTES, 'UTF-8') ?>">
+                   value="<?= h($q) ?>">
         </div>
         <div class="col-8 col-md-3 col-lg-3">
             <label class="form-label small text-muted mb-1">ประเภทไฟล์</label>
@@ -132,10 +132,10 @@ $app_url_safe = htmlspecialchars(APP_URL, ENT_QUOTES, 'UTF-8');
                             <i class="bi <?= $icon ?> fs-5 flex-shrink-0 mt-1"></i>
                             <div>
                                 <div class="fw-medium">
-                                    <?= htmlspecialchars($doc['title'], ENT_QUOTES, 'UTF-8') ?>
+                                    <?= h($doc['title']) ?>
                                 </div>
                                 <div class="small text-muted text-truncate" style="max-width:260px;">
-                                    <?= htmlspecialchars($doc['original_name'], ENT_QUOTES, 'UTF-8') ?>
+                                    <?= h($doc['original_name']) ?>
                                     <?= $ext !== '' ? "<span class=\"badge bg-light text-dark border ms-1\">{$ext}</span>" : '' ?>
                                 </div>
                             </div>

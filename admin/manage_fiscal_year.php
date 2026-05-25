@@ -169,16 +169,16 @@ require __DIR__ . '/../includes/header.php';
                     <tr><td colspan="5" class="text-center text-muted py-4">ยังไม่มีปีงบประมาณ — กดปุ่มเพิ่มด้านบน</td></tr>
                 <?php else: foreach ($years as $y):
                     $cnt = (int)$y['activity_count'];
-                    $name_safe = htmlspecialchars($y['name'], ENT_QUOTES, 'UTF-8');
+                    $name_safe = h($y['name']);
                     $data_json = json_encode($y, JSON_HEX_APOS|JSON_HEX_QUOT|JSON_UNESCAPED_UNICODE);
                 ?>
                     <tr>
                         <td data-label="ชื่อ"><strong><?= $name_safe ?></strong></td>
                         <td data-label="ช่วงเดือน" class="small text-muted">
-                            <?= htmlspecialchars($th_months[(int)$y['start_month']] ?? '', ENT_QUOTES, 'UTF-8') ?>
+                            <?= h($th_months[(int)$y['start_month']] ?? '') ?>
                             <?= (int)$y['start_year'] + 543 ?>
                             –
-                            <?= htmlspecialchars($th_months[(int)$y['end_month']] ?? '', ENT_QUOTES, 'UTF-8') ?>
+                            <?= h($th_months[(int)$y['end_month']] ?? '') ?>
                             <?= (int)$y['end_year'] + 543 ?>
                         </td>
                         <td data-label="กิจกรรม">
@@ -248,7 +248,7 @@ require __DIR__ . '/../includes/header.php';
                             <select id="fyStartMonth" name="start_month" class="form-select" required>
                                 <?php foreach ($th_months as $m => $n): ?>
                                     <option value="<?= $m ?>" <?= $m===10?'selected':'' ?>>
-                                        <?= htmlspecialchars($n, ENT_QUOTES, 'UTF-8') ?>
+                                        <?= h($n) ?>
                                     </option>
                                 <?php endforeach; ?>
                             </select>
@@ -263,7 +263,7 @@ require __DIR__ . '/../includes/header.php';
                             <select id="fyEndMonth" name="end_month" class="form-select" required>
                                 <?php foreach ($th_months as $m => $n): ?>
                                     <option value="<?= $m ?>" <?= $m===9?'selected':'' ?>>
-                                        <?= htmlspecialchars($n, ENT_QUOTES, 'UTF-8') ?>
+                                        <?= h($n) ?>
                                     </option>
                                 <?php endforeach; ?>
                             </select>

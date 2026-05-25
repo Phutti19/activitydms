@@ -93,10 +93,10 @@ $is_first_time = !empty($_SESSION['must_change_password']);
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>เปลี่ยนรหัสผ่าน — <?= htmlspecialchars(APP_NAME, ENT_QUOTES, 'UTF-8') ?></title>
-    <link href="<?= htmlspecialchars(APP_URL, ENT_QUOTES, 'UTF-8') ?>/assets/vendor/fonts/kanit/kanit.css" rel="stylesheet">
-    <link href="<?= htmlspecialchars(APP_URL, ENT_QUOTES, 'UTF-8') ?>/assets/vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet">
-    <link href="<?= htmlspecialchars(APP_URL, ENT_QUOTES, 'UTF-8') ?>/assets/vendor/bootstrap-icons/font/bootstrap-icons.css" rel="stylesheet">
+    <title>เปลี่ยนรหัสผ่าน — <?= h(APP_NAME) ?></title>
+    <link href="<?= h(APP_URL) ?>/assets/vendor/fonts/kanit/kanit.css" rel="stylesheet">
+    <link href="<?= h(APP_URL) ?>/assets/vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet">
+    <link href="<?= h(APP_URL) ?>/assets/vendor/bootstrap-icons/font/bootstrap-icons.css" rel="stylesheet">
     <style>
         body { font-family: 'Kanit', system-ui, sans-serif; background: #F8FAFC; min-height: 100vh; display: flex; align-items: center; }
         .card { border-radius: 14px; border: 1px solid #E2E8F0; }
@@ -113,7 +113,7 @@ $is_first_time = !empty($_SESSION['must_change_password']);
                         <i class="bi bi-shield-lock me-2 text-primary"></i>เปลี่ยนรหัสผ่าน
                     </h1>
                     <p class="text-muted small">
-                        <?= htmlspecialchars($_SESSION['display_name'] ?? '', ENT_QUOTES, 'UTF-8') ?>
+                        <?= h($_SESSION['display_name'] ?? '') ?>
                     </p>
 
                     <?php if ($is_first_time): ?>
@@ -126,7 +126,7 @@ $is_first_time = !empty($_SESSION['must_change_password']);
                     <?php if ($error !== ''): ?>
                         <div class="alert alert-danger small">
                             <i class="bi bi-exclamation-triangle me-1"></i>
-                            <?= htmlspecialchars($error, ENT_QUOTES, 'UTF-8') ?>
+                            <?= h($error) ?>
                         </div>
                     <?php endif; ?>
 
@@ -154,7 +154,7 @@ $is_first_time = !empty($_SESSION['must_change_password']);
                                 <i class="bi bi-check-lg me-1"></i> บันทึกรหัสผ่านใหม่
                             </button>
                             <?php if (!$is_first_time): ?>
-                                <a href="<?= htmlspecialchars(APP_URL, ENT_QUOTES, 'UTF-8') ?>/index.php"
+                                <a href="<?= h(APP_URL) ?>/index.php"
                                    class="btn btn-outline-secondary">ยกเลิก</a>
                             <?php endif; ?>
                         </div>
@@ -162,7 +162,7 @@ $is_first_time = !empty($_SESSION['must_change_password']);
 
                     <?php if ($is_first_time): ?>
                         <hr class="my-4">
-                        <form method="POST" action="<?= htmlspecialchars(APP_URL, ENT_QUOTES, 'UTF-8') ?>/logout.php" class="text-center">
+                        <form method="POST" action="<?= h(APP_URL) ?>/logout.php" class="text-center">
                             <?= csrf_field() ?>
                             <button type="submit" class="btn btn-link btn-sm text-muted">
                                 <i class="bi bi-box-arrow-right me-1"></i> ออกจากระบบ

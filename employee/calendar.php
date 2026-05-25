@@ -12,7 +12,7 @@ $extra_head  = '<style>
 .fc-event-title { font-weight: 500; }
 </style>';
 require __DIR__ . '/../includes/header.php';
-$app_url_safe = htmlspecialchars(APP_URL, ENT_QUOTES, 'UTF-8');
+$app_url_safe = h(APP_URL);
 ?>
 
 <div class="page-header">
@@ -40,7 +40,7 @@ $app_url_safe = htmlspecialchars(APP_URL, ENT_QUOTES, 'UTF-8');
     <div id="calTooltipContent"></div>
 </div>
 
-<script src="<?= htmlspecialchars(APP_URL, ENT_QUOTES, 'UTF-8') ?>/assets/vendor/fullcalendar/index.global.min.js"></script>
+<script src="<?= h(APP_URL) ?>/assets/vendor/fullcalendar/index.global.min.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function () {
     var calEl = document.getElementById('calendar');

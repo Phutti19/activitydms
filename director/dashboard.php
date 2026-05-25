@@ -107,20 +107,13 @@ foreach ($dept_rows as $i => &$dr) {
 }
 unset($dr);
 
-function dir_dash_fmt(string $dt): string {
-    $ts = strtotime($dt);
-    $m  = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
-    return date('j', $ts) . ' ' . $m[(int)date('n', $ts)-1] . ' ' . (date('Y', $ts)+543) . ' ' . date('H:i', $ts);
-}
 
 $page_title  = 'หน้าหลัก';
 $page_active = 'dashboard';
 require __DIR__ . '/../includes/header.php';
-$app_url_safe = htmlspecialchars(APP_URL, ENT_QUOTES, 'UTF-8');
+$app_url_safe = h(APP_URL);
 
-$thai_months = ['','ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
-$thai_days   = ['อา','จ','อ','พ','พฤ','ศ','ส'];
-$today_label = $thai_days[(int)date('w')] . ' ' . date('j') . ' ' . $thai_months[(int)date('n')] . ' ' . ((int)date('Y') + 543);
+$today_label = th_weekday_date();
 ?>
 
 <!-- Hero greeting -->
@@ -130,11 +123,11 @@ $today_label = $thai_days[(int)date('w')] . ' ' . date('j') . ' ' . $thai_months
         <div class="row align-items-center g-3">
             <div class="col-12 col-md-8">
                 <div class="small opacity-75 mb-1">
-                    <i class="bi bi-calendar3 me-1"></i><?= htmlspecialchars($today_label, ENT_QUOTES, 'UTF-8') ?>
-                    · ปีงบประมาณ <?= htmlspecialchars($fy_name, ENT_QUOTES, 'UTF-8') ?>
+                    <i class="bi bi-calendar3 me-1"></i><?= h($today_label) ?>
+                    · ปีงบประมาณ <?= h($fy_name) ?>
                 </div>
                 <h1 class="h3 fw-bold mb-2">
-                    สวัสดี, <?= htmlspecialchars($_SESSION['display_name'] ?? '', ENT_QUOTES, 'UTF-8') ?>
+                    สวัสดี, <?= h($_SESSION['display_name'] ?? '') ?>
                 </h1>
                 <p class="mb-0 opacity-90">
                     <?php if ($today_count > 0): ?>
@@ -234,16 +227,16 @@ $today_label = $thai_days[(int)date('w')] . ' ' . date('j') . ' ' . $thai_months
                     $is_ongoing = strtotime($a['start_datetime']) <= time() && strtotime($a['end_datetime']) >= time();
                 ?>
                 <li class="list-group-item d-flex align-items-center gap-3 py-3">
-                    <div style="width:4px;height:40px;background:<?= htmlspecialchars($color, ENT_QUOTES, 'UTF-8') ?>;border-radius:2px;flex-shrink:0;"></div>
+                    <div style="width:4px;height:40px;background:<?= h($color) ?>;border-radius:2px;flex-shrink:0;"></div>
                     <div class="flex-grow-1 overflow-hidden">
                         <a href="<?= $app_url_safe ?>/director/activity_view.php?id=<?= (int)$a['id'] ?>"
                            class="fw-medium text-decoration-none text-truncate d-block">
-                            <?= htmlspecialchars($a['title'], ENT_QUOTES, 'UTF-8') ?>
+                            <?= h($a['title']) ?>
                         </a>
                         <div class="small text-muted">
-                            <i class="bi bi-clock me-1"></i><?= htmlspecialchars(dir_dash_fmt($a['start_datetime']), ENT_QUOTES, 'UTF-8') ?>
+                            <i class="bi bi-clock me-1"></i><?= h(th_datetime($a['start_datetime'], ' ')) ?>
                             <?php if (!empty($a['location'])): ?>
-                            · <i class="bi bi-geo-alt me-1"></i><?= htmlspecialchars($a['location'], ENT_QUOTES, 'UTF-8') ?>
+                            · <i class="bi bi-geo-alt me-1"></i><?= h($a['location']) ?>
                             <?php endif; ?>
                         </div>
                     </div>
@@ -289,7 +282,7 @@ $today_label = $thai_days[(int)date('w')] . ' ' . date('j') . ' ' . $thai_months
                         ?>
                         <tr>
                             <td class="fw-medium small">
-                                <?= htmlspecialchars($dr['dept_name'], ENT_QUOTES, 'UTF-8') ?>
+                                <?= h($dr['dept_name']) ?>
                             </td>
                             <td class="text-center small"><?= (int)$dr['member_count'] ?></td>
                             <td class="text-center small text-success"><?= (int)$dr['attended'] ?></td>
@@ -311,7 +304,7 @@ $today_label = $thai_days[(int)date('w')] . ' ' . date('j') . ' ' . $thai_months
 </div>
 
 <?php if (!empty($dept_rows) && array_sum($dept_chart['attended']) + array_sum($dept_chart['absent']) > 0): ?>
-<script src="<?= htmlspecialchars(APP_URL, ENT_QUOTES, 'UTF-8') ?>/assets/vendor/chartjs/chart.umd.min.js"></script>
+<script src="<?= h(APP_URL) ?>/assets/vendor/chartjs/chart.umd.min.js"></script>
 <script>
 (function () {
     const ctx = document.getElementById('deptChart');

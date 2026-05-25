@@ -28,393 +28,8 @@ if (!$pre_check->fetch()) {
     exit;
 }
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    verify_csrf_or_die();
-    $action = $_POST['action'] ?? '';
-    $pdo = db();
-
-    if ($action === 'delete_photo') {
-        $photo_id = (int)($_POST['photo_id'] ?? 0);
-        $stmt = $pdo->prepare('SELECT * FROM activity_photos WHERE id = :id AND activity_id = :a');
-        $stmt->execute([':id' => $photo_id, ':a' => $id]);
-        $photo = $stmt->fetch();
-        if ($photo) {
-            $pdo->prepare('DELETE FROM activity_photos WHERE id = :id')->execute([':id' => $photo_id]);
-            audit_log('delete_photo', 'activity_photos', $photo_id, $photo, null);
-            if (($photo['source'] ?? 'upload') === 'upload' && !empty($photo['filename'])) {
-                safe_unlink_upload('activities', $photo['filename']);
-            }
-            flash_set('success', 'ลบภาพสำเร็จ');
-        }
-
-    } elseif ($action === 'add_drive_photo') {
-        $drive_url = trim((string)($_POST['drive_url'] ?? ''));
-        $parsed    = parse_url($drive_url);
-        $host      = strtolower((string)($parsed['host'] ?? ''));
-        $allowed_hosts = ['drive.google.com', 'docs.google.com'];
-
-        if ($drive_url === '' || mb_strlen($drive_url) > 500
-            || !$parsed
-            || ($parsed['scheme'] ?? '') !== 'https'
-            || !filter_var($drive_url, FILTER_VALIDATE_URL)
-            || !in_array($host, $allowed_hosts, true)) {
-            flash_set('error', 'ลิงก์ Drive ไม่ถูกต้อง (ต้องเป็น https://drive.google.com/... หรือ https://docs.google.com/...)');
-        } else {
-            // หา sort_order ถัดไปจาก drive_link เท่านั้น (ไม่ชนกับ upload ที่จำกัด 1-5)
-            $next = $pdo->prepare(
-                "SELECT COALESCE(MAX(sort_order),0)+1 FROM activity_photos
-                 WHERE activity_id = :a AND source = 'drive_link'"
-            );
-            $next->execute([':a' => $id]);
-            $sort_order = (int)$next->fetchColumn();
-            if ($sort_order < 1) $sort_order = 1;
-
-            $stmt = $pdo->prepare(
-                "INSERT INTO activity_photos (activity_id, source, drive_url, sort_order)
-                 VALUES (:a, 'drive_link', :u, :s)"
-            );
-            $stmt->execute([':a' => $id, ':u' => $drive_url, ':s' => $sort_order]);
-            $photo_id = (int)$pdo->lastInsertId();
-            audit_log('add_drive_photo', 'activity_photos', $photo_id, null, [
-                'activity_id' => $id, 'drive_url' => $drive_url, 'sort_order' => $sort_order,
-            ]);
-            flash_set('success', 'เพิ่มลิงก์ Drive สำเร็จ');
-        }
-
-    } elseif ($action === 'add_attachment') {
-        $type  = (string)($_POST['type'] ?? '');
-        $label = trim((string)($_POST['label'] ?? ''));
-
-        if (!in_array($type, ['file', 'url'], true)) {
-            flash_set('error', 'ประเภทไฟล์แนบไม่ถูกต้อง');
-        } elseif ($label === '' || mb_strlen($label) > 255) {
-            flash_set('error', 'กรุณาใส่ชื่อไฟล์แนบ (ไม่เกิน 255 ตัว)');
-        } elseif ($type === 'url') {
-            $url = trim((string)($_POST['url'] ?? ''));
-            $parsed = parse_url($url);
-            if ($url === '' || mb_strlen($url) > 500
-                || !$parsed || !in_array($parsed['scheme'] ?? '', ['http','https'], true)
-                || !filter_var($url, FILTER_VALIDATE_URL)) {
-                flash_set('error', 'URL ไม่ถูกต้อง (ต้องเป็น http:// หรือ https://)');
-            } else {
-                $stmt = $pdo->prepare(
-                    'INSERT INTO activity_attachments (activity_id, type, label, url)
-                     VALUES (:a, "url", :l, :u)'
-                );
-                $stmt->execute([':a' => $id, ':l' => $label, ':u' => $url]);
-                $att_id = (int)$pdo->lastInsertId();
-                audit_log('add_attachment_url', 'activity_attachments', $att_id, null, [
-                    'activity_id' => $id, 'type' => 'url', 'label' => $label, 'url' => $url,
-                ]);
-                flash_set('success', 'เพิ่มลิงก์ "' . $label . '" สำเร็จ');
-            }
-        } else {
-            $file = $_FILES['file'] ?? null;
-            if (!$file) {
-                flash_set('error', 'ไม่ได้เลือกไฟล์');
-            } else {
-                $max_doc = mb_to_bytes((int)($_ENV['UPLOAD_MAX_DOC_MB'] ?? 10));
-                $allowed = UPLOAD_DOC_MIMES + UPLOAD_IMAGE_MIMES;
-                $check   = validate_uploaded_file($file, $allowed, $max_doc);
-                if (!$check['ok']) {
-                    flash_set('error', $check['error']);
-                } else {
-                    try {
-                        $filename = move_uploaded_with_uuid($file, 'activities', $check['ext']);
-                        $stmt = $pdo->prepare(
-                            'INSERT INTO activity_attachments (activity_id, type, label, filename)
-                             VALUES (:a, "file", :l, :f)'
-                        );
-                        $stmt->execute([':a' => $id, ':l' => $label, ':f' => $filename]);
-                        $att_id = (int)$pdo->lastInsertId();
-                        audit_log('add_attachment_file', 'activity_attachments', $att_id, null, [
-                            'activity_id' => $id, 'type' => 'file', 'label' => $label,
-                            'filename' => $filename, 'mime' => $check['mime'], 'size' => $check['size'],
-                        ]);
-                        flash_set('success', 'อัปโหลด "' . $label . '" สำเร็จ');
-                    } catch (Throwable $e) {
-                        error_log('[activity_view add_attachment] ' . $e->getMessage());
-                        flash_set('error', 'อัปโหลดไม่สำเร็จ');
-                    }
-                }
-            }
-        }
-
-    } elseif ($action === 'delete_attachment') {
-        $att_id = (int)($_POST['attachment_id'] ?? 0);
-        $stmt = $pdo->prepare(
-            'SELECT * FROM activity_attachments WHERE id = :id AND activity_id = :a'
-        );
-        $stmt->execute([':id' => $att_id, ':a' => $id]);
-        $att = $stmt->fetch();
-        if ($att) {
-            $pdo->prepare('DELETE FROM activity_attachments WHERE id = :id')->execute([':id' => $att_id]);
-            audit_log('delete_attachment', 'activity_attachments', $att_id, $att, null);
-            if ($att['type'] === 'file' && !empty($att['filename'])) {
-                safe_unlink_upload('activities', $att['filename']);
-            }
-            flash_set('success', 'ลบไฟล์แนบสำเร็จ');
-        }
-
-    } elseif ($action === 'add_participants') {
-        $user_ids = $_POST['user_ids'] ?? [];
-        if (!is_array($user_ids) || empty($user_ids)) {
-            flash_set('error', 'กรุณาเลือกผู้ใช้อย่างน้อย 1 คน');
-        } else {
-            $user_ids = array_filter(array_map('intval', $user_ids), fn($x) => $x > 0);
-            $user_ids = array_values(array_unique($user_ids));
-
-            $pdo->beginTransaction();
-            try {
-                $added = 0;
-                $email_count = 0;
-                foreach ($user_ids as $uid) {
-                    $uchk = $pdo->prepare('SELECT 1 FROM users WHERE id = :id AND is_active = 1');
-                    $uchk->execute([':id' => $uid]);
-                    if (!$uchk->fetch()) continue;
-
-                    $exists = $pdo->prepare(
-                        'SELECT 1 FROM activity_registrations WHERE activity_id = :a AND user_id = :u'
-                    );
-                    $exists->execute([':a' => $id, ':u' => $uid]);
-                    if ($exists->fetch()) continue;
-
-                    $ins = $pdo->prepare(
-                        'INSERT INTO activity_registrations
-                            (activity_id, user_id, status, checked_by, checked_at)
-                         VALUES (:a, :u, "attended", :cb, NOW())'
-                    );
-                    $ins->execute([
-                        ':a'  => $id,
-                        ':u'  => $uid,
-                        ':cb' => (int)$_SESSION['user_id'],
-                    ]);
-                    $reg_id = (int)$pdo->lastInsertId();
-
-                    audit_log('add_participant', 'activity_registrations', $reg_id, null, [
-                        'activity_id' => $id, 'user_id' => $uid,
-                    ]);
-
-                    if (enqueue_new_activity_email($uid, $id)) {
-                        $email_count++;
-                    }
-                    notify_new_activity($uid, $id);
-                    $added++;
-                }
-                $pdo->commit();
-
-                $msg = "เพิ่มผู้เข้าร่วม {$added} คน";
-                if ($email_count > 0) {
-                    $msg .= " · ส่งอีเมลแจ้งเตือน {$email_count} ฉบับ";
-                } elseif ($added > 0) {
-                    $msg .= " · ไม่ได้ส่งอีเมล (ปิดใน notification settings)";
-                }
-                flash_set('success', $msg);
-            } catch (Throwable $e) {
-                $pdo->rollBack();
-                throw $e;
-            }
-        }
-
-    } elseif ($action === 'update_attendance') {
-        $reg_ids = $_POST['reg_ids'] ?? [];
-        $new_status = $_POST['new_status'] ?? '';
-        if (!in_array($new_status, ['registered','attended','absent'], true)) {
-            flash_set('error', 'สถานะไม่ถูกต้อง');
-        } elseif (!is_array($reg_ids) || empty($reg_ids)) {
-            flash_set('error', 'กรุณาเลือกผู้เข้าร่วม');
-        } else {
-            $reg_ids = array_filter(array_map('intval', $reg_ids), fn($x) => $x > 0);
-            $reg_ids = array_values(array_unique($reg_ids));
-
-            $pdo->beginTransaction();
-            try {
-                $updated = 0;
-                foreach ($reg_ids as $rid) {
-                    $old = $pdo->prepare(
-                        'SELECT * FROM activity_registrations WHERE id = :id AND activity_id = :a'
-                    );
-                    $old->execute([':id' => $rid, ':a' => $id]);
-                    $old_row = $old->fetch();
-                    if (!$old_row) continue;
-
-                    if ($new_status === 'registered') {
-                        $pdo->prepare(
-                            'UPDATE activity_registrations
-                             SET status = "registered", checked_by = NULL, checked_at = NULL
-                             WHERE id = :id'
-                        )->execute([':id' => $rid]);
-                    } else {
-                        $pdo->prepare(
-                            'UPDATE activity_registrations
-                             SET status = :s, checked_by = :cb, checked_at = NOW()
-                             WHERE id = :id'
-                        )->execute([
-                            ':s' => $new_status,
-                            ':cb' => (int)$_SESSION['user_id'],
-                            ':id' => $rid,
-                        ]);
-                    }
-                    audit_log('update_attendance', 'activity_registrations', $rid,
-                        ['status' => $old_row['status']],
-                        ['status' => $new_status]
-                    );
-                    $updated++;
-                }
-                $pdo->commit();
-                $label = ['registered'=>'รอเช็ค', 'attended'=>'มา', 'absent'=>'ไม่เข้าร่วม'][$new_status];
-                flash_set('success', "อัปเดตสถานะ \"{$label}\" จำนวน {$updated} รายการ");
-            } catch (Throwable $e) {
-                $pdo->rollBack();
-                throw $e;
-            }
-        }
-
-    } elseif ($action === 'remove_participant') {
-        $reg_id = (int)($_POST['reg_id'] ?? 0);
-        $stmt = $pdo->prepare(
-            'SELECT * FROM activity_registrations WHERE id = :id AND activity_id = :a'
-        );
-        $stmt->execute([':id' => $reg_id, ':a' => $id]);
-        $old_row = $stmt->fetch();
-        if ($old_row) {
-            $pdo->prepare('DELETE FROM activity_registrations WHERE id = :id')
-                ->execute([':id' => $reg_id]);
-            audit_log('remove_participant', 'activity_registrations', $reg_id, $old_row, null);
-            flash_set('success', 'ลบผู้เข้าร่วมสำเร็จ');
-        }
-
-    } elseif ($action === 'remove_participants_bulk') {
-        $reg_ids = $_POST['reg_ids'] ?? [];
-        if (!is_array($reg_ids) || empty($reg_ids)) {
-            flash_set('error', 'กรุณาเลือกผู้เข้าร่วมที่จะลบ');
-        } else {
-            $reg_ids = array_filter(array_map('intval', $reg_ids), fn($x) => $x > 0);
-            $reg_ids = array_values(array_unique($reg_ids));
-
-            $pdo->beginTransaction();
-            try {
-                $removed = 0;
-                foreach ($reg_ids as $rid) {
-                    $stmt = $pdo->prepare(
-                        'SELECT * FROM activity_registrations WHERE id = :id AND activity_id = :a'
-                    );
-                    $stmt->execute([':id' => $rid, ':a' => $id]);
-                    $old_row = $stmt->fetch();
-                    if (!$old_row) continue;
-
-                    $pdo->prepare('DELETE FROM activity_registrations WHERE id = :id')
-                        ->execute([':id' => $rid]);
-                    audit_log('remove_participant', 'activity_registrations', $rid, $old_row, null);
-                    $removed++;
-                }
-                $pdo->commit();
-                flash_set('success', "ลบผู้เข้าร่วม {$removed} คน");
-            } catch (Throwable $e) {
-                $pdo->rollBack();
-                throw $e;
-            }
-        }
-
-    } elseif ($action === 'upload_cert') {
-        $cert_user_id = (int)($_POST['cert_user_id'] ?? 0);
-        $file = $_FILES['cert_file'] ?? null;
-        if ($cert_user_id <= 0) {
-            flash_set('error', 'กรุณาระบุผู้รับเกียรติบัตร');
-        } elseif (!$file) {
-            flash_set('error', 'ไม่ได้เลือกไฟล์');
-        } else {
-            $usr = $pdo->prepare('SELECT id FROM users WHERE id = :id AND is_active = 1 LIMIT 1');
-            $usr->execute([':id' => $cert_user_id]);
-            $is_participant = $pdo->prepare(
-                'SELECT 1 FROM activity_registrations
-                 WHERE activity_id = :a AND user_id = :u LIMIT 1'
-            );
-            $is_participant->execute([':a' => $id, ':u' => $cert_user_id]);
-
-            if (!$usr->fetch()) {
-                flash_set('error', 'ไม่พบผู้ใช้');
-            } elseif (!$is_participant->fetch()) {
-                flash_set('error', 'ผู้ใช้นี้ไม่ได้เป็นผู้เข้าร่วมกิจกรรมนี้ — ออกเกียรติบัตรให้ได้เฉพาะผู้เข้าร่วมเท่านั้น');
-            } else {
-                $dup = $pdo->prepare(
-                    'SELECT id FROM certificates WHERE activity_id = :a AND user_id = :u LIMIT 1'
-                );
-                $dup->execute([':a' => $id, ':u' => $cert_user_id]);
-                if ($dup->fetch()) {
-                    flash_set('error', 'ผู้ใช้นี้มีเกียรติบัตรสำหรับกิจกรรมนี้แล้ว');
-                } else {
-                    $check = validate_uploaded_file($file, UPLOAD_CERT_MIMES, mb_to_bytes(10));
-                    if ($check['ok']) {
-                        $per_limit = $check['ext'] === 'pdf'
-                            ? mb_to_bytes((int)($_ENV['UPLOAD_MAX_DOC_MB'] ?? 10))
-                            : mb_to_bytes((int)($_ENV['UPLOAD_MAX_IMAGE_MB'] ?? 5));
-                        if ($check['size'] > $per_limit) {
-                            $max_mb = $check['ext'] === 'pdf' ? 10 : 5;
-                            $check  = ['ok' => false, 'error' => "ไฟล์ใหญ่เกิน {$max_mb} MB"];
-                        }
-                    }
-                    if (!$check['ok']) {
-                        flash_set('error', $check['error']);
-                    } else {
-                        $original_name = basename((string)($file['name'] ?? ''));
-                        if ($original_name === '' || mb_strlen($original_name) > 255) {
-                            $original_name = 'certificate.' . $check['ext'];
-                        }
-                        try {
-                            $filename = move_uploaded_with_uuid($file, 'certificates', $check['ext']);
-                            $ins = $pdo->prepare(
-                                'INSERT INTO certificates
-                                   (activity_id, user_id, filename, original_name, uploaded_by)
-                                 VALUES (:a, :u, :f, :o, :by)'
-                            );
-                            $ins->execute([
-                                ':a'  => $id,
-                                ':u'  => $cert_user_id,
-                                ':f'  => $filename,
-                                ':o'  => $original_name,
-                                ':by' => (int)$_SESSION['user_id'],
-                            ]);
-                            $cert_id = (int)$pdo->lastInsertId();
-                            audit_log('upload_cert', 'certificates', $cert_id, null, [
-                                'activity_id' => $id,
-                                'user_id'     => $cert_user_id,
-                                'filename'    => $filename,
-                                'mime'        => $check['mime'],
-                                'size'        => $check['size'],
-                            ]);
-                            enqueue_new_certificate_email($cert_user_id, $id);
-                            notify_new_certificate($cert_user_id, $id);
-                            flash_set('success', 'อัปโหลดเกียรติบัตรสำเร็จ');
-                        } catch (Throwable $e) {
-                            error_log('[activity_view upload_cert] ' . $e->getMessage());
-                            flash_set('error', 'อัปโหลดไม่สำเร็จ');
-                        }
-                    }
-                }
-            }
-        }
-
-    } elseif ($action === 'delete_cert') {
-        $cert_id  = (int)($_POST['cert_id'] ?? 0);
-        $cert_row = $pdo->prepare(
-            'SELECT * FROM certificates WHERE id = :id AND activity_id = :a LIMIT 1'
-        );
-        $cert_row->execute([':id' => $cert_id, ':a' => $id]);
-        $cert = $cert_row->fetch();
-        if ($cert) {
-            $pdo->prepare('DELETE FROM certificates WHERE id = :id')->execute([':id' => $cert_id]);
-            audit_log('delete_cert', 'certificates', $cert_id, $cert, null);
-            safe_unlink_upload('certificates', $cert['filename']);
-            flash_set('success', 'ลบเกียรติบัตรสำเร็จ');
-        }
-    }
-
-    $tab = $_POST['_tab'] ?? '';
-    header('Location: ' . APP_URL . '/admin/activity_view.php?id=' . $id
-        . ($tab !== '' ? '#' . urlencode($tab) : ''));
-    exit;
-}
+// POST action handler แยกไป _activity_view_post.php (ใช้ $id จาก scope นี้)
+require __DIR__ . '/_activity_view_post.php';
 
 $stmt = db()->prepare(
     'SELECT a.*, t.name AS type_name, t.color AS type_color,
@@ -500,13 +115,6 @@ $cert_count   = count($all_certs);
 $max_cert_pdf_mb = (int)($_ENV['UPLOAD_MAX_DOC_MB'] ?? 10);
 $max_cert_img_mb = (int)($_ENV['UPLOAD_MAX_IMAGE_MB'] ?? 5);
 
-function format_date_th(string $datetime): string {
-    $ts = strtotime($datetime);
-    $months = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
-    return date('j', $ts) . ' ' . $months[(int)date('n', $ts) - 1] . ' '
-         . (date('Y', $ts) + 543) . ', ' . date('H:i', $ts);
-}
-
 $type_color = preg_match('/^#[0-9a-fA-F]{6}$/', (string)$activity['type_color'])
     ? $activity['type_color'] : '#5F5E5A';
 
@@ -520,13 +128,13 @@ require __DIR__ . '/../includes/header.php';
 
 <div class="page-header">
     <div class="flex-grow-1">
-        <a href="<?= htmlspecialchars(APP_URL, ENT_QUOTES, 'UTF-8') ?>/admin/manage_activities.php"
+        <a href="<?= h(APP_URL) ?>/admin/manage_activities.php"
            class="text-muted small text-decoration-none">
             <i class="bi bi-arrow-left"></i> กลับสู่รายการ
         </a>
-        <h1 class="page-title mt-1"><?= htmlspecialchars($activity['title'], ENT_QUOTES, 'UTF-8') ?></h1>
+        <h1 class="page-title mt-1"><?= h($activity['title']) ?></h1>
     </div>
-    <a href="<?= htmlspecialchars(APP_URL, ENT_QUOTES, 'UTF-8') ?>/admin/activity_form.php?action=edit&id=<?= $id ?>"
+    <a href="<?= h(APP_URL) ?>/admin/activity_form.php?action=edit&id=<?= $id ?>"
        class="btn btn-outline-primary">
         <i class="bi bi-pencil me-1"></i> แก้ไข
     </a>
@@ -571,7 +179,7 @@ require __DIR__ . '/../includes/header.php';
                 <div class="col-12 col-md-6">
                     <div class="text-muted small">ประเภท</div>
                     <span class="badge-pill" style="background:<?= $type_color ?>1A;color:<?= $type_color ?>;">
-                        <?= htmlspecialchars($activity['type_name'] ?? '—', ENT_QUOTES, 'UTF-8') ?>
+                        <?= h($activity['type_name'] ?? '—') ?>
                     </span>
                 </div>
                 <div class="col-12 col-md-6">
@@ -589,25 +197,25 @@ require __DIR__ . '/../includes/header.php';
                 </div>
                 <div class="col-12 col-md-6">
                     <div class="text-muted small">ปีงบประมาณ</div>
-                    <div><?= htmlspecialchars($activity['fiscal_name'] ?? '—', ENT_QUOTES, 'UTF-8') ?></div>
+                    <div><?= h($activity['fiscal_name'] ?? '—') ?></div>
                 </div>
                 <div class="col-12 col-md-6">
                     <div class="text-muted small">เริ่มต้น</div>
                     <div><i class="bi bi-calendar3 me-1"></i>
-                        <?= htmlspecialchars(format_date_th($activity['start_datetime']), ENT_QUOTES, 'UTF-8') ?>
+                        <?= h(th_datetime($activity['start_datetime'])) ?>
                     </div>
                 </div>
                 <div class="col-12 col-md-6">
                     <div class="text-muted small">สิ้นสุด</div>
                     <div><i class="bi bi-calendar3 me-1"></i>
-                        <?= htmlspecialchars(format_date_th($activity['end_datetime']), ENT_QUOTES, 'UTF-8') ?>
+                        <?= h(th_datetime($activity['end_datetime'])) ?>
                     </div>
                 </div>
                 <?php if (!empty($activity['location'])): ?>
                 <div class="col-12">
                     <div class="text-muted small">สถานที่</div>
                     <div><i class="bi bi-geo-alt me-1"></i>
-                        <?= htmlspecialchars($activity['location'], ENT_QUOTES, 'UTF-8') ?>
+                        <?= h($activity['location']) ?>
                     </div>
                 </div>
                 <?php endif; ?>
@@ -615,17 +223,17 @@ require __DIR__ . '/../includes/header.php';
                 <div class="col-12">
                     <div class="text-muted small">รายละเอียด</div>
                     <div style="white-space: pre-wrap;"><?=
-                        htmlspecialchars($activity['description'], ENT_QUOTES, 'UTF-8')
+                        h($activity['description'])
                     ?></div>
                 </div>
                 <?php endif; ?>
                 <?php if (!empty($activity['external_url'])): ?>
                 <div class="col-12">
                     <div class="text-muted small">ลิงก์ภายนอก</div>
-                    <a href="<?= htmlspecialchars($activity['external_url'], ENT_QUOTES, 'UTF-8') ?>"
+                    <a href="<?= h($activity['external_url']) ?>"
                        target="_blank" rel="noopener noreferrer">
                         <i class="bi bi-box-arrow-up-right me-1"></i>
-                        <?= htmlspecialchars($activity['external_url'], ENT_QUOTES, 'UTF-8') ?>
+                        <?= h($activity['external_url']) ?>
                     </a>
                 </div>
                 <?php endif; ?>
@@ -639,7 +247,7 @@ require __DIR__ . '/../includes/header.php';
                 </div>
                 <div class="col-12 col-md-6">
                     <div class="text-muted small">สร้างโดย</div>
-                    <div><?= htmlspecialchars($activity['creator_name'] ?? '—', ENT_QUOTES, 'UTF-8') ?></div>
+                    <div><?= h($activity['creator_name'] ?? '—') ?></div>
                 </div>
             </div>
         </div>
@@ -689,7 +297,7 @@ require __DIR__ . '/../includes/header.php';
             </h6>
             <div class="list-group">
                 <?php foreach ($drive_photos as $dp):
-                    $du_safe = htmlspecialchars((string)$dp['drive_url'], ENT_QUOTES, 'UTF-8'); ?>
+                    $du_safe = h((string)$dp['drive_url']); ?>
                 <div class="list-group-item d-flex align-items-center gap-2">
                     <i class="bi bi-google text-primary"></i>
                     <a href="<?= $du_safe ?>" target="_blank" rel="noopener" class="text-truncate flex-grow-1" title="<?= $du_safe ?>">
@@ -712,13 +320,13 @@ require __DIR__ . '/../includes/header.php';
 
         <div id="photoGrid" class="row g-2">
             <?php foreach ($upload_photos as $p):
-                $orig_safe = htmlspecialchars($p['original_name'], ENT_QUOTES, 'UTF-8');
+                $orig_safe = h($p['original_name']);
             ?>
             <div class="col-6 col-md-4 col-lg-3" data-photo-id="<?= (int)$p['id'] ?>">
                 <div class="card h-100 overflow-hidden position-relative">
-                    <a href="<?= htmlspecialchars(APP_URL, ENT_QUOTES, 'UTF-8') ?>/api/download.php?type=photo&id=<?= (int)$p['id'] ?>"
+                    <a href="<?= h(APP_URL) ?>/api/download.php?type=photo&id=<?= (int)$p['id'] ?>"
                        target="_blank">
-                        <img src="<?= htmlspecialchars(APP_URL, ENT_QUOTES, 'UTF-8') ?>/api/download.php?type=photo&id=<?= (int)$p['id'] ?>"
+                        <img src="<?= h(APP_URL) ?>/api/download.php?type=photo&id=<?= (int)$p['id'] ?>"
                              alt="<?= $orig_safe ?>"
                              style="width:100%;aspect-ratio:1;object-fit:cover;display:block;">
                     </a>
@@ -805,7 +413,7 @@ require __DIR__ . '/../includes/header.php';
         <div class="card">
             <ul class="list-group list-group-flush">
                 <?php foreach ($attachments as $att):
-                    $label_safe = htmlspecialchars($att['label'], ENT_QUOTES, 'UTF-8');
+                    $label_safe = h($att['label']);
                     $is_file = ($att['type'] === 'file');
                 ?>
                 <li class="list-group-item d-flex align-items-center gap-2 flex-wrap">
@@ -815,24 +423,24 @@ require __DIR__ . '/../includes/header.php';
                         <div class="fw-medium"><?= $label_safe ?></div>
                         <?php if ($is_file): ?>
                             <div class="small text-muted text-truncate">
-                                <?= htmlspecialchars((string)$att['filename'], ENT_QUOTES, 'UTF-8') ?>
+                                <?= h((string)$att['filename']) ?>
                             </div>
                         <?php else: ?>
-                            <a href="<?= htmlspecialchars((string)$att['url'], ENT_QUOTES, 'UTF-8') ?>"
+                            <a href="<?= h((string)$att['url']) ?>"
                                class="small text-truncate d-inline-block" style="max-width:300px;"
                                target="_blank" rel="noopener noreferrer">
-                                <?= htmlspecialchars((string)$att['url'], ENT_QUOTES, 'UTF-8') ?>
+                                <?= h((string)$att['url']) ?>
                             </a>
                         <?php endif; ?>
                     </div>
                     <div class="d-flex gap-1">
                         <?php if ($is_file): ?>
-                            <a href="<?= htmlspecialchars(APP_URL, ENT_QUOTES, 'UTF-8') ?>/api/download.php?type=attachment&id=<?= (int)$att['id'] ?>"
+                            <a href="<?= h(APP_URL) ?>/api/download.php?type=attachment&id=<?= (int)$att['id'] ?>"
                                class="btn btn-sm btn-outline-primary" target="_blank" title="ดาวน์โหลด">
                                 <i class="bi bi-download"></i>
                             </a>
                         <?php else: ?>
-                            <a href="<?= htmlspecialchars((string)$att['url'], ENT_QUOTES, 'UTF-8') ?>"
+                            <a href="<?= h((string)$att['url']) ?>"
                                class="btn btn-sm btn-outline-primary" target="_blank" rel="noopener noreferrer"
                                title="เปิดลิงก์">
                                 <i class="bi bi-box-arrow-up-right"></i>
@@ -940,7 +548,7 @@ require __DIR__ . '/../includes/header.php';
                             </thead>
                             <tbody>
                                 <?php foreach ($registrations as $r):
-                                    $name_safe = htmlspecialchars($r['fullname'], ENT_QUOTES, 'UTF-8');
+                                    $name_safe = h($r['fullname']);
                                     $st_badge = match($r['status']) {
                                         'attended' => '<span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>เข้าร่วม</span>',
                                         'absent'   => '<span class="badge bg-danger"><i class="bi bi-x-circle me-1"></i>ไม่เข้าร่วม</span>',
@@ -954,10 +562,10 @@ require __DIR__ . '/../includes/header.php';
                                     </td>
                                     <td data-label="ชื่อ-สกุล">
                                         <div class="fw-medium"><?= $name_safe ?></div>
-                                        <div class="text-muted small">@<?= htmlspecialchars($r['username'], ENT_QUOTES, 'UTF-8') ?></div>
+                                        <div class="text-muted small">@<?= h($r['username']) ?></div>
                                     </td>
                                     <td data-label="แผนก" class="small text-muted">
-                                        <?= htmlspecialchars($r['dept_name'] ?? '—', ENT_QUOTES, 'UTF-8') ?>
+                                        <?= h($r['dept_name'] ?? '—') ?>
                                     </td>
                                     <td data-label="สถานะ" class="text-center"><?= $st_badge ?></td>
                                     <td data-label="" class="text-end text-nowrap">
@@ -1050,7 +658,7 @@ require __DIR__ . '/../includes/header.php';
                     <tbody>
                         <?php foreach ($registrations as $r):
                             $cert    = $cert_by_user[(int)$r['uid']] ?? null;
-                            $nm_safe = htmlspecialchars($r['fullname'], ENT_QUOTES, 'UTF-8');
+                            $nm_safe = h($r['fullname']);
                             $st_badge = match($r['status']) {
                                 'attended' => '<span class="badge bg-success">เข้าร่วม</span>',
                                 'absent'   => '<span class="badge bg-danger">ไม่เข้าร่วม</span>',
@@ -1060,12 +668,12 @@ require __DIR__ . '/../includes/header.php';
                         <tr>
                             <td data-label="ชื่อ-สกุล">
                                 <div class="fw-medium"><?= $nm_safe ?></div>
-                                <div class="text-muted small">@<?= htmlspecialchars($r['username'], ENT_QUOTES, 'UTF-8') ?></div>
+                                <div class="text-muted small">@<?= h($r['username']) ?></div>
                             </td>
                             <td data-label="การเข้าร่วม"><?= $st_badge ?></td>
                             <td data-label="เกียรติบัตร" class="text-end text-nowrap">
                                 <?php if ($cert): ?>
-                                    <a href="<?= htmlspecialchars(APP_URL, ENT_QUOTES, 'UTF-8') ?>/api/download.php?type=cert&id=<?= (int)$cert['id'] ?>"
+                                    <a href="<?= h(APP_URL) ?>/api/download.php?type=cert&id=<?= (int)$cert['id'] ?>"
                                        class="btn btn-sm btn-outline-warning" target="_blank" title="ดาวน์โหลด">
                                         <i class="bi bi-download"></i>
                                     </a>
@@ -1168,7 +776,7 @@ require __DIR__ . '/../includes/header.php';
                                 $current_dept_id = $u_dept_id;
                         ?>
                             <div class="bg-light px-3 py-2 small fw-semibold border-bottom">
-                                <?= htmlspecialchars($u['dept_name'] ?? '—', ENT_QUOTES, 'UTF-8') ?>
+                                <?= h($u['dept_name'] ?? '—') ?>
                             </div>
                         <?php
                             endif;
@@ -1179,19 +787,19 @@ require __DIR__ . '/../includes/header.php';
                             );
                         ?>
                             <label class="d-flex align-items-center gap-2 px-3 py-2 border-bottom user-item m-0"
-                                   data-search="<?= htmlspecialchars($search_data, ENT_QUOTES, 'UTF-8') ?>"
+                                   data-search="<?= h($search_data) ?>"
                                    style="cursor: pointer;">
                                 <input type="checkbox" name="user_ids[]"
                                        value="<?= (int)$u['id'] ?>" class="user-check">
                                 <div class="flex-grow-1">
                                     <div class="small fw-medium">
-                                        <?= htmlspecialchars($u['fullname'], ENT_QUOTES, 'UTF-8') ?>
+                                        <?= h($u['fullname']) ?>
                                     </div>
                                     <div class="small text-muted">
-                                        <?= htmlspecialchars($u['email'], ENT_QUOTES, 'UTF-8') ?>
+                                        <?= h($u['email']) ?>
                                     </div>
                                 </div>
-                                <span class="badge-pill badge-role-<?= htmlspecialchars($u['role'], ENT_QUOTES, 'UTF-8') ?>">
+                                <span class="badge-pill badge-role-<?= h($u['role']) ?>">
                                     <?= ['admin'=>'Admin','director'=>'Director','employee'=>'Employee'][$u['role']] ?? '' ?>
                                 </span>
                             </label>
@@ -1213,275 +821,17 @@ require __DIR__ . '/../includes/header.php';
 </div>
 
 <script>
-const ACTIVITY_ID = <?= (int)$id ?>;
-const CSRF_TOKEN = <?= json_encode(csrf_token(), JSON_HEX_TAG|JSON_HEX_QUOT) ?>;
-const CSRF_NAME = <?= json_encode(CSRF_TOKEN_NAME, JSON_HEX_TAG|JSON_HEX_QUOT) ?>;
-const APP_BASE = <?= json_encode(APP_URL, JSON_HEX_TAG|JSON_HEX_QUOT) ?>;
-const MAX_IMAGE_BYTES = <?= mb_to_bytes($max_image_mb) ?>;
-
-let currentPhotoCount = <?= $photo_count ?>;
-
-window.addEventListener('load', () => {
-    const hash = window.location.hash.replace('#', '');
-    if (!hash) return;
-    const trigger = document.querySelector(`[data-bs-target="#${hash}"]`);
-    if (trigger && typeof bootstrap !== 'undefined') {
-        new bootstrap.Tab(trigger).show();
-    }
-});
-
-function toggleAttType() {
-    const isFile = document.getElementById('attTypeFile').checked;
-    document.getElementById('attFileWrap').classList.toggle('d-none', !isFile);
-    document.getElementById('attUrlWrap').classList.toggle('d-none', isFile);
-    document.getElementById('attFile').required = isFile;
-    document.getElementById('attUrl').required = !isFile;
-}
-document.getElementById('attTypeFile').addEventListener('change', toggleAttType);
-document.getElementById('attTypeUrl').addEventListener('change', toggleAttType);
-toggleAttType();
-
-// ===== Bulk remove participants (event delegation) =====
-function updateBulkBar() {
-    const bar = document.getElementById('bulkBar');
-    const cnt = document.getElementById('bulkCount');
-    const selAllEl = document.getElementById('selAll');
-    const checks = document.querySelectorAll('.reg-check');
-    if (!bar || !checks.length) return;
-    const checkedCount = document.querySelectorAll('.reg-check:checked').length;
-    if (cnt) cnt.textContent = checkedCount;
-    bar.classList.toggle('d-none', checkedCount === 0);
-    if (selAllEl) selAllEl.checked = (checkedCount === checks.length && checkedCount > 0);
-}
-
-document.addEventListener('change', (e) => {
-    if (e.target.id === 'selAll') {
-        document.querySelectorAll('.reg-check').forEach(c => c.checked = e.target.checked);
-        updateBulkBar();
-    } else if (e.target.classList && e.target.classList.contains('reg-check')) {
-        updateBulkBar();
-    }
-});
-
-document.addEventListener('click', (e) => {
-    const btn = e.target.closest('.remove-one-btn');
-    if (!btn) return;
-    if (!confirm('ลบ "' + btn.dataset.name + '" ออกจากรายชื่อ?')) return;
-    const idEl = document.getElementById('removeOneRegId');
-    const fmEl = document.getElementById('removeOneForm');
-    if (idEl && fmEl) {
-        idEl.value = btn.dataset.regId;
-        fmEl.submit();
-    }
-});
-
-// ===== Per-row status change =====
-document.addEventListener('click', (e) => {
-    const btn = e.target.closest('.change-status-btn');
-    if (!btn) return;
-    const fm = document.getElementById('updateOneForm');
-    const idEl = document.getElementById('updateOneRegId');
-    const stEl = document.getElementById('updateOneNewStatus');
-    if (fm && idEl && stEl) {
-        idEl.value = btn.dataset.regId;
-        stEl.value = btn.dataset.newStatus;
-        fm.submit();
-    }
-});
-
-// ===== Bulk attendance buttons =====
-document.addEventListener('click', (e) => {
-    const btn = e.target.closest('.bulk-status-btn');
-    if (!btn) return;
-    const checked = document.querySelectorAll('.reg-check:checked').length;
-    if (checked === 0) return;
-    const labels = { attended: 'เข้าร่วม', absent: 'ไม่เข้าร่วม', registered: 'รอเช็ค' };
-    const status = btn.dataset.status;
-    if (!confirm('เปลี่ยนสถานะของ ' + checked + ' คนเป็น "' + (labels[status] || status) + '"?')) return;
-    document.getElementById('bulkAction').value = 'update_attendance';
-    document.getElementById('bulkNewStatus').value = status;
-    document.getElementById('bulkAttendanceForm').submit();
-});
-
-// ===== Bulk remove button =====
-document.addEventListener('click', (e) => {
-    const btn = e.target.closest('#bulkRemoveBtn');
-    if (!btn) return;
-    const checked = document.querySelectorAll('.reg-check:checked').length;
-    if (checked === 0) return;
-    if (!confirm('ลบผู้เข้าร่วมที่เลือก ' + checked + ' คน?')) return;
-    document.getElementById('bulkAction').value = 'remove_participants_bulk';
-    document.getElementById('bulkNewStatus').value = '';
-    document.getElementById('bulkAttendanceForm').submit();
-});
-
-// ===== Add participants modal — search filter + selection counter (event delegation) =====
-function visibleUserChecksList() {
-    return Array.from(document.querySelectorAll('.user-check')).filter(c => {
-        const label = c.closest('.user-item');
-        return label && label.style.display !== 'none';
-    });
-}
-function updateAddCount() {
-    const checked = document.querySelectorAll('.user-check:checked').length;
-    const cnt = document.getElementById('addSelCount');
-    const submit = document.getElementById('addSubmit');
-    const selectAllBtn = document.getElementById('selectAllUsers');
-    if (cnt) cnt.textContent = checked;
-    if (submit) submit.disabled = checked === 0;
-    if (selectAllBtn) {
-        const visible = visibleUserChecksList();
-        const allChecked = visible.length > 0 && visible.every(c => c.checked);
-        selectAllBtn.innerHTML = allChecked
-            ? '<i class="bi bi-x-square me-1"></i> ยกเลิกทั้งหมด'
-            : '<i class="bi bi-check2-square me-1"></i> เลือกทั้งหมด';
-    }
-}
-
-document.addEventListener('change', (e) => {
-    if (e.target.classList && e.target.classList.contains('user-check')) {
-        updateAddCount();
-    }
-});
-
-document.addEventListener('input', (e) => {
-    if (e.target.id !== 'userSearch') return;
-    const q = e.target.value.toLowerCase().trim();
-    document.querySelectorAll('.user-item').forEach(item => {
-        const data = item.dataset.search || '';
-        item.style.display = (q === '' || data.includes(q)) ? '' : 'none';
-    });
-});
-
-document.addEventListener('click', (e) => {
-    if (e.target.closest('#selectAllUsers')) {
-        const visible = visibleUserChecksList();
-        if (visible.length === 0) return;
-        const allChecked = visible.every(c => c.checked);
-        visible.forEach(c => c.checked = !allChecked);
-        updateAddCount();
-    }
-});
-
-<?php if ($can_add_photo): ?>
-const dropZone = document.getElementById('dropZone');
-const photoInput = document.getElementById('photoInput');
-const photoGrid = document.getElementById('photoGrid');
-const uploadStatus = document.getElementById('uploadStatus');
-
-dropZone.addEventListener('click', () => photoInput.click());
-dropZone.addEventListener('dragover', e => {
-    e.preventDefault();
-    dropZone.style.borderColor = '#0EA5E9';
-    dropZone.style.background = '#E0F2FE';
-});
-dropZone.addEventListener('dragleave', () => {
-    dropZone.style.borderColor = '#CBD5E1';
-    dropZone.style.background = '#F8FAFC';
-});
-dropZone.addEventListener('drop', e => {
-    e.preventDefault();
-    dropZone.style.borderColor = '#CBD5E1';
-    dropZone.style.background = '#F8FAFC';
-    handleFiles(e.dataTransfer.files);
-});
-photoInput.addEventListener('change', e => handleFiles(e.target.files));
-
-function showStatus(text, type = 'info') {
-    const cls = type === 'error' ? 'alert-danger' : (type === 'success' ? 'alert-success' : 'alert-info');
-    const div = document.createElement('div');
-    div.className = `alert ${cls} small alert-dismissible fade show`;
-    div.innerHTML = text + '<button type="button" class="btn-close" data-bs-dismiss="alert"></button>';
-    uploadStatus.appendChild(div);
-    setTimeout(() => bootstrap.Alert.getOrCreateInstance(div).close(), 5000);
-}
-
-async function handleFiles(files) {
-    for (const file of files) {
-        if (currentPhotoCount >= 5) {
-            showStatus('ครบ 5 ภาพแล้ว — กรุณารีเฟรชหน้า', 'error');
-            return;
-        }
-        if (file.size > MAX_IMAGE_BYTES) {
-            showStatus(`${file.name}: ไฟล์ใหญ่เกิน <?= $max_image_mb ?> MB`, 'error');
-            continue;
-        }
-        if (!['image/jpeg','image/png','image/webp'].includes(file.type)) {
-            showStatus(`${file.name}: ประเภทไม่อนุญาต (JPG/PNG/WEBP เท่านั้น)`, 'error');
-            continue;
-        }
-        await uploadOne(file);
-    }
-    photoInput.value = '';
-}
-
-async function uploadOne(file) {
-    const fd = new FormData();
-    fd.append(CSRF_NAME, CSRF_TOKEN);
-    fd.append('activity_id', ACTIVITY_ID);
-    fd.append('photo', file);
-
-    showStatus(`กำลังอัปโหลด ${file.name}...`, 'info');
-    try {
-        const res = await fetch(APP_BASE + '/api/activity_upload_photo.php', {
-            method: 'POST',
-            body: fd,
-        });
-        const data = await res.json();
-        if (!data.ok) throw new Error(data.error || 'อัปโหลดไม่สำเร็จ');
-
-        currentPhotoCount++;
-        appendPhoto(data.photo);
-        document.getElementById('remainSlot').textContent = (5 - currentPhotoCount).toString();
-        if (currentPhotoCount >= 5) {
-            dropZone.style.display = 'none';
-        }
-        showStatus(`อัปโหลด ${file.name} สำเร็จ`, 'success');
-    } catch (e) {
-        showStatus(`${file.name}: ${e.message}`, 'error');
-    }
-}
-
-function appendPhoto(p) {
-    const empty = photoGrid.querySelector('.col-12.text-center');
-    if (empty) empty.remove();
-
-    const col = document.createElement('div');
-    col.className = 'col-6 col-md-4 col-lg-3';
-    col.dataset.photoId = p.id;
-    const url = APP_BASE + '/api/download.php?type=photo&id=' + p.id;
-    const safeOrig = (p.original_name || '').replace(/[<>"']/g, '');
-    col.innerHTML = `
-        <div class="card h-100 overflow-hidden position-relative">
-            <a href="${url}" target="_blank">
-                <img src="${url}" alt="" style="width:100%;aspect-ratio:1;object-fit:cover;display:block;">
-            </a>
-            <form method="POST" class="position-absolute top-0 end-0 m-1"
-                  onsubmit="return confirm('ลบภาพนี้?');">
-                <input type="hidden" name="${CSRF_NAME}" value="${CSRF_TOKEN}">
-                <input type="hidden" name="action" value="delete_photo">
-                <input type="hidden" name="photo_id" value="${p.id}">
-                <input type="hidden" name="_tab" value="tab-photos">
-                <button type="submit" class="btn btn-sm btn-danger" style="opacity:0.85;">
-                    <i class="bi bi-x-lg"></i>
-                </button>
-            </form>
-            <div class="p-2 small text-muted text-truncate" title="${safeOrig}">${safeOrig}</div>
-        </div>`;
-    photoGrid.appendChild(col);
-}
-<?php endif; ?>
-
-// ===== Cert upload modal =====
-document.querySelectorAll('.upload-cert-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-        document.getElementById('certUserId').value = btn.dataset.userId;
-        document.getElementById('certUserName').textContent = btn.dataset.userName;
-        const fi = document.getElementById('certFileInput');
-        if (fi) fi.value = '';
-        new bootstrap.Modal(document.getElementById('uploadCertModal')).show();
-    });
-});
+window.ACTIVITY_VIEW = {
+    id: <?= (int)$id ?>,
+    csrfToken: <?= json_encode(csrf_token(), JSON_HEX_TAG|JSON_HEX_QUOT) ?>,
+    csrfName: <?= json_encode(CSRF_TOKEN_NAME, JSON_HEX_TAG|JSON_HEX_QUOT) ?>,
+    appBase: <?= json_encode(APP_URL, JSON_HEX_TAG|JSON_HEX_QUOT) ?>,
+    maxImageBytes: <?= mb_to_bytes($max_image_mb) ?>,
+    maxImageMb: <?= (int)$max_image_mb ?>,
+    photoCount: <?= (int)$photo_count ?>,
+    canAddPhoto: <?= $can_add_photo ? 'true' : 'false' ?>
+};
 </script>
+<script src="<?= h(APP_URL) ?>/assets/js/activity_view.js?v=<?= @filemtime(__DIR__ . '/../assets/js/activity_view.js') ?: time() ?>"></script>
 
 <?php require __DIR__ . '/../includes/footer.php'; ?>

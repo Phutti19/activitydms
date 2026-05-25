@@ -187,7 +187,7 @@ require __DIR__ . '/../includes/header.php';
 </div>
 
 <div class="card p-3 mb-3">
-    <form method="GET" class="row g-2 align-items-end">
+    <form method="GET" class="row g-2 align-items-end" data-autofilter>
         <div class="col-12 col-md-5">
             <label class="form-label small mb-1">กิจกรรม</label>
             <select name="activity_id" class="form-select">
@@ -195,7 +195,7 @@ require __DIR__ . '/../includes/header.php';
                 <?php foreach ($act_list as $a): ?>
                 <option value="<?= (int)$a['id'] ?>"
                     <?= $filter_activity === (int)$a['id'] ? 'selected' : '' ?>>
-                    <?= htmlspecialchars($a['title'], ENT_QUOTES, 'UTF-8') ?>
+                    <?= h($a['title']) ?>
                 </option>
                 <?php endforeach; ?>
             </select>
@@ -204,7 +204,7 @@ require __DIR__ . '/../includes/header.php';
             <label class="form-label small mb-1">ค้นหาชื่อผู้รับ</label>
             <input type="text" name="q" class="form-control"
                    placeholder="ชื่อ / username"
-                   value="<?= htmlspecialchars($q_user, ENT_QUOTES, 'UTF-8') ?>">
+                   value="<?= h($q_user) ?>">
         </div>
         <div class="col-6 col-md-2">
             <button type="submit" class="btn btn-outline-primary w-100">
@@ -213,7 +213,7 @@ require __DIR__ . '/../includes/header.php';
         </div>
         <?php if ($filter_activity > 0 || $q_user !== ''): ?>
         <div class="col-6 col-md-1">
-            <a href="<?= htmlspecialchars(APP_URL, ENT_QUOTES, 'UTF-8') ?>/admin/manage_certificates.php"
+            <a href="<?= h(APP_URL) ?>/admin/manage_certificates.php"
                class="btn btn-outline-secondary w-100" title="ล้างตัวกรอง">
                 <i class="bi bi-x-lg"></i>
             </a>
@@ -247,27 +247,27 @@ require __DIR__ . '/../includes/header.php';
             </thead>
             <tbody>
                 <?php foreach ($certs as $cert):
-                    $act_safe  = htmlspecialchars($cert['activity_title'], ENT_QUOTES, 'UTF-8');
-                    $user_safe = htmlspecialchars($cert['user_name'], ENT_QUOTES, 'UTF-8');
-                    $orig_safe = htmlspecialchars($cert['original_name'], ENT_QUOTES, 'UTF-8');
+                    $act_safe  = h($cert['activity_title']);
+                    $user_safe = h($cert['user_name']);
+                    $orig_safe = h($cert['original_name']);
                     $ext = strtoupper(pathinfo((string)$cert['original_name'], PATHINFO_EXTENSION));
                 ?>
                 <tr>
                     <td data-label="กิจกรรม">
-                        <a href="<?= htmlspecialchars(APP_URL, ENT_QUOTES, 'UTF-8') ?>/admin/activity_view.php?id=<?= (int)$cert['activity_id'] ?>#tab-certs"
+                        <a href="<?= h(APP_URL) ?>/admin/activity_view.php?id=<?= (int)$cert['activity_id'] ?>#tab-certs"
                            class="fw-medium text-decoration-none">
                             <?= $act_safe ?>
                         </a>
                     </td>
                     <td data-label="ผู้รับ">
                         <div class="fw-medium"><?= $user_safe ?></div>
-                        <div class="small text-muted">@<?= htmlspecialchars($cert['username'], ENT_QUOTES, 'UTF-8') ?></div>
+                        <div class="small text-muted">@<?= h($cert['username']) ?></div>
                     </td>
                     <td data-label="ไฟล์" class="small text-muted">
                         <?= $orig_safe ?> <?= $ext !== '' ? "($ext)" : '' ?>
                     </td>
                     <td data-label="อัปโหลดโดย" class="small">
-                        <?= htmlspecialchars($cert['uploader_name'], ENT_QUOTES, 'UTF-8') ?>
+                        <?= h($cert['uploader_name']) ?>
                     </td>
                     <?php $cts = strtotime((string)$cert['created_at']); ?>
                     <td data-label="วันที่" class="small text-muted">
@@ -277,7 +277,7 @@ require __DIR__ . '/../includes/header.php';
                         ) ?>
                     </td>
                     <td data-label="จัดการ" class="text-end text-nowrap">
-                        <a href="<?= htmlspecialchars(APP_URL, ENT_QUOTES, 'UTF-8') ?>/api/download.php?type=cert&id=<?= (int)$cert['id'] ?>"
+                        <a href="<?= h(APP_URL) ?>/api/download.php?type=cert&id=<?= (int)$cert['id'] ?>"
                            class="btn btn-sm btn-outline-warning" target="_blank" title="ดาวน์โหลด">
                             <i class="bi bi-download"></i>
                         </a>
@@ -321,7 +321,7 @@ require __DIR__ . '/../includes/header.php';
                             <?php foreach ($act_list as $a): ?>
                             <option value="<?= (int)$a['id'] ?>"
                                 <?= $filter_activity === (int)$a['id'] ? 'selected' : '' ?>>
-                                <?= htmlspecialchars($a['title'], ENT_QUOTES, 'UTF-8') ?>
+                                <?= h($a['title']) ?>
                             </option>
                             <?php endforeach; ?>
                         </select>
@@ -334,8 +334,8 @@ require __DIR__ . '/../includes/header.php';
                             <option value="">— เลือกผู้รับ —</option>
                             <?php foreach ($users_list as $u): ?>
                             <option value="<?= (int)$u['id'] ?>">
-                                <?= htmlspecialchars($u['fullname'], ENT_QUOTES, 'UTF-8') ?>
-                                — <?= htmlspecialchars($u['email'], ENT_QUOTES, 'UTF-8') ?>
+                                <?= h($u['fullname']) ?>
+                                — <?= h($u['email']) ?>
                             </option>
                             <?php endforeach; ?>
                         </select>

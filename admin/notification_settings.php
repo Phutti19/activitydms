@@ -86,7 +86,7 @@ require __DIR__ . '/../includes/header.php';
     <div class="col-6 col-md-3">
         <div class="card text-center p-3">
             <div class="fs-2 fw-bold text-<?= $s['color'] ?>"><?= number_format($cnt) ?></div>
-            <div class="small text-muted"><?= htmlspecialchars($s['label'], ENT_QUOTES, 'UTF-8') ?></div>
+            <div class="small text-muted"><?= h($s['label']) ?></div>
         </div>
     </div>
     <?php endforeach; ?>
@@ -99,13 +99,13 @@ require __DIR__ . '/../includes/header.php';
         <?php foreach ($rows as $row): ?>
         <div class="form-check form-switch mb-3">
             <input class="form-check-input" type="checkbox" role="switch"
-                   id="chk_<?= htmlspecialchars($row['setting_key'], ENT_QUOTES, 'UTF-8') ?>"
-                   name="settings[<?= htmlspecialchars($row['setting_key'], ENT_QUOTES, 'UTF-8') ?>]"
+                   id="chk_<?= h($row['setting_key']) ?>"
+                   name="settings[<?= h($row['setting_key']) ?>]"
                    value="1"
                    <?= $row['setting_value'] === '1' ? 'checked' : '' ?>>
             <label class="form-check-label"
-                   for="chk_<?= htmlspecialchars($row['setting_key'], ENT_QUOTES, 'UTF-8') ?>">
-                <?= htmlspecialchars($row['label'], ENT_QUOTES, 'UTF-8') ?>
+                   for="chk_<?= h($row['setting_key']) ?>">
+                <?= h($row['label']) ?>
             </label>
         </div>
         <?php endforeach; ?>
@@ -157,14 +157,14 @@ require __DIR__ . '/../includes/header.php';
                     <td data-label="#" class="text-muted small"><?= (int)$q['id'] ?></td>
                     <td data-label="ผู้รับ">
                         <div class="small fw-medium text-truncate" style="max-width:180px;">
-                            <?= htmlspecialchars($q['to_name'], ENT_QUOTES, 'UTF-8') ?>
+                            <?= h($q['to_name']) ?>
                         </div>
                         <div class="small text-muted text-truncate" style="max-width:180px;">
-                            <?= htmlspecialchars($q['to_email'], ENT_QUOTES, 'UTF-8') ?>
+                            <?= h($q['to_email']) ?>
                         </div>
                     </td>
                     <td data-label="หัวเรื่อง" class="small text-truncate" style="max-width:220px;">
-                        <?= htmlspecialchars($q['subject'], ENT_QUOTES, 'UTF-8') ?>
+                        <?= h($q['subject']) ?>
                     </td>
                     <td data-label="สถานะ">
                         <span class="badge bg-<?= $status_badge ?>"><?= $status_label ?></span>
@@ -180,7 +180,7 @@ require __DIR__ . '/../includes/header.php';
                     <td data-label="ส่งเมื่อ" class="small text-muted text-nowrap">
                         <?php $sts = $q['sent_at'] ? strtotime((string)$q['sent_at']) : 0; ?>
                         <?= $q['sent_at']
-                            ? htmlspecialchars(date('d/m/', $sts) . (date('Y', $sts) + 543) . ' ' . date('H:i', $sts), ENT_QUOTES, 'UTF-8')
+                            ? h(date('d/m/', $sts) . (date('Y', $sts) + 543) . ' ' . date('H:i', $sts))
                             : '—' ?>
                     </td>
                 </tr>

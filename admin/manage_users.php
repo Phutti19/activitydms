@@ -294,18 +294,18 @@ require __DIR__ . '/../includes/header.php';
     </button>
 </div>
 
-<form method="GET" class="card p-3 mb-3">
+<form method="GET" class="card p-3 mb-3" data-autofilter>
     <div class="row g-2">
         <div class="col-12 col-md-4">
             <input type="text" name="q" class="form-control" placeholder="ค้นหาชื่อ / อีเมล / รหัส"
-                   value="<?= htmlspecialchars($q, ENT_QUOTES, 'UTF-8') ?>">
+                   value="<?= h($q) ?>">
         </div>
         <div class="col-6 col-md-3">
             <select name="dept" class="form-select">
                 <option value="0">ทุกแผนก</option>
                 <?php foreach ($departments as $d): ?>
                     <option value="<?= (int)$d['id'] ?>" <?= $f_dept===(int)$d['id']?'selected':'' ?>>
-                        <?= htmlspecialchars($d['name'], ENT_QUOTES, 'UTF-8') ?>
+                        <?= h($d['name']) ?>
                     </option>
                 <?php endforeach; ?>
             </select>
@@ -315,7 +315,7 @@ require __DIR__ . '/../includes/header.php';
                 <option value="">ทุกบทบาท</option>
                 <?php foreach ($valid_roles as $r): ?>
                     <option value="<?= $r ?>" <?= $f_role===$r?'selected':'' ?>>
-                        <?= htmlspecialchars($role_label[$r], ENT_QUOTES, 'UTF-8') ?>
+                        <?= h($role_label[$r]) ?>
                     </option>
                 <?php endforeach; ?>
             </select>
@@ -351,27 +351,27 @@ require __DIR__ . '/../includes/header.php';
                     <tr><td colspan="6" class="text-center text-muted py-4">ไม่พบผู้ใช้</td></tr>
                 <?php else: foreach ($users as $u):
                     $is_self = ((int)$u['id'] === (int)$_SESSION['user_id']);
-                    $username_safe = htmlspecialchars($u['username'], ENT_QUOTES, 'UTF-8');
+                    $username_safe = h($u['username']);
                     $fullname = trim(($u['prefix_name'] ?? '') . ' ' . $u['first_name'] . ' ' . $u['last_name']);
-                    $fullname_safe = htmlspecialchars($fullname, ENT_QUOTES, 'UTF-8');
+                    $fullname_safe = h($fullname);
                     $data_json = json_encode(audit_redact($u), JSON_HEX_APOS|JSON_HEX_QUOT|JSON_UNESCAPED_UNICODE);
                 ?>
                 <tr>
                     <td data-label="ชื่อ-สกุล">
                         <div class="fw-semibold"><?= $fullname_safe ?></div>
                         <div class="text-muted small">
-                            @<?= $username_safe ?> · <?= htmlspecialchars($u['email'], ENT_QUOTES, 'UTF-8') ?>
+                            @<?= $username_safe ?> · <?= h($u['email']) ?>
                         </div>
                     </td>
                     <td data-label="รหัส" class="small text-muted">
-                        <?= htmlspecialchars($u['staff_code'], ENT_QUOTES, 'UTF-8') ?>
+                        <?= h($u['staff_code']) ?>
                     </td>
                     <td data-label="แผนก" class="small">
-                        <?= htmlspecialchars($u['department_name'] ?? '—', ENT_QUOTES, 'UTF-8') ?>
+                        <?= h($u['department_name'] ?? '—') ?>
                     </td>
                     <td data-label="บทบาท">
-                        <span class="badge-pill badge-role-<?= htmlspecialchars($u['role'], ENT_QUOTES, 'UTF-8') ?>">
-                            <?= htmlspecialchars($role_label[$u['role']] ?? '', ENT_QUOTES, 'UTF-8') ?>
+                        <span class="badge-pill badge-role-<?= h($u['role']) ?>">
+                            <?= h($role_label[$u['role']] ?? '') ?>
                         </span>
                     </td>
                     <td data-label="สถานะ">
@@ -478,7 +478,7 @@ require __DIR__ . '/../includes/header.php';
                                    autocomplete="off" placeholder="เลือกหรือพิมพ์ตำแหน่ง">
                             <datalist id="positionOptions">
                                 <?php foreach ($position_options as $opt): ?>
-                                    <option value="<?= htmlspecialchars((string)$opt, ENT_QUOTES, 'UTF-8') ?>"></option>
+                                    <option value="<?= h((string)$opt) ?>"></option>
                                 <?php endforeach; ?>
                             </datalist>
                         </div>
@@ -487,7 +487,7 @@ require __DIR__ . '/../includes/header.php';
                             <select id="uStaffType" name="staff_type" class="form-select">
                                 <option value="">— เลือกประเภท —</option>
                                 <?php foreach ($staff_type_choices as $opt): ?>
-                                    <option value="<?= htmlspecialchars($opt, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($opt, ENT_QUOTES, 'UTF-8') ?></option>
+                                    <option value="<?= h($opt, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($opt) ?></option>
                                 <?php endforeach; ?>
                             </select>
                         </div>
@@ -497,7 +497,7 @@ require __DIR__ . '/../includes/header.php';
                             <select id="uDept" name="department_id" class="form-select" required>
                                 <option value="">— เลือกแผนก —</option>
                                 <?php foreach ($departments as $d): ?>
-                                    <option value="<?= (int)$d['id'] ?>"><?= htmlspecialchars($d['name'], ENT_QUOTES, 'UTF-8') ?></option>
+                                    <option value="<?= (int)$d['id'] ?>"><?= h($d['name']) ?></option>
                                 <?php endforeach; ?>
                             </select>
                         </div>
@@ -505,7 +505,7 @@ require __DIR__ . '/../includes/header.php';
                             <label for="uRole" class="form-label small fw-medium">บทบาท <span class="text-danger">*</span></label>
                             <select id="uRole" name="role" class="form-select" required>
                                 <?php foreach ($valid_roles as $r): ?>
-                                    <option value="<?= $r ?>"><?= htmlspecialchars($role_label[$r], ENT_QUOTES, 'UTF-8') ?></option>
+                                    <option value="<?= $r ?>"><?= h($role_label[$r]) ?></option>
                                 <?php endforeach; ?>
                             </select>
                             <div id="uRoleSelfWarn" class="form-text small text-warning d-none">

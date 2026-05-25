@@ -34,15 +34,27 @@ body {
 }
 
 /* ซ่อน scrollbar ของหน้าเว็บ (ยังเลื่อนได้ปกติด้วย mouse wheel / touch / keyboard) */
-html {
+/* ซ่อน scrollbar ทุก element (modal-body, table-responsive, offcanvas, textarea ฯลฯ)
+   — ยังเลื่อนได้ปกติด้วย wheel/touch/keyboard */
+*,
+html,
+body {
     scrollbar-width: none;          /* Firefox */
     -ms-overflow-style: none;       /* IE/Edge legacy */
 }
+*::-webkit-scrollbar,
 html::-webkit-scrollbar,
 body::-webkit-scrollbar {
-    width: 0;
-    height: 0;
+    width: 0 !important;
+    height: 0 !important;
     display: none;                  /* Chrome / Safari / Edge ใหม่ */
+}
+
+/* กัน Bootstrap modal ใส่ padding-right ชดเชย scrollbar ที่เราซ่อนไว้แล้ว
+   (Bootstrap วัด scrollbar เป็น 17px → เกิดช่องว่างด้านขวาตอนเปิด modal) */
+body.modal-open {
+    padding-right: 0 !important;
+    overflow: hidden;
 }
 
 /* ===== Layout ===== */

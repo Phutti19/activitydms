@@ -137,7 +137,7 @@ require __DIR__ . '/../includes/header.php';
                     <tr><td colspan="5" class="text-center text-muted py-4">ยังไม่มีประเภทกิจกรรม</td></tr>
                 <?php else: foreach ($types as $t):
                     $cnt = (int)$t['activity_count'];
-                    $name_safe = htmlspecialchars($t['name'], ENT_QUOTES, 'UTF-8');
+                    $name_safe = h($t['name']);
                     $color_safe = preg_match('/^#[0-9a-fA-F]{6}$/', $t['color']) ? $t['color'] : '#6c757d';
                     $data_json = json_encode($t, JSON_HEX_APOS|JSON_HEX_QUOT|JSON_UNESCAPED_UNICODE);
                 ?>
@@ -146,7 +146,7 @@ require __DIR__ . '/../includes/header.php';
                         <td data-label="สี">
                             <span class="d-inline-block rounded align-middle"
                                   style="width:18px;height:18px;background:<?= $color_safe ?>;border:1px solid #ddd;"></span>
-                            <code class="small ms-1"><?= htmlspecialchars($color_safe, ENT_QUOTES, 'UTF-8') ?></code>
+                            <code class="small ms-1"><?= h($color_safe) ?></code>
                         </td>
                         <td data-label="กิจกรรม">
                             <span class="badge bg-secondary"><?= $cnt ?> รายการ</span>

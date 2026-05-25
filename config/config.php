@@ -35,6 +35,7 @@ if ($_ENV['APP_ENV'] === 'prod') {
 
 // Constants ที่ใช้บ่อย — อ่านจาก env ครั้งเดียว
 define('APP_NAME', $_ENV['APP_NAME'] ?? 'ActivityDMS');
+define('ORG_FULL_NAME', $_ENV['ORG_FULL_NAME'] ?? 'สำนักวิทยบริการและเทคโนโลยีสารสนเทศ (ARIT)');
 define('APP_URL', rtrim($_ENV['APP_URL'], '/'));
 define('APP_ENV', $_ENV['APP_ENV']);
 define('APP_DEBUG', filter_var($_ENV['APP_DEBUG'], FILTER_VALIDATE_BOOLEAN));

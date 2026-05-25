@@ -97,10 +97,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>เข้าสู่ระบบ — <?= htmlspecialchars(APP_NAME, ENT_QUOTES, 'UTF-8') ?></title>
-    <link href="<?= htmlspecialchars(APP_URL, ENT_QUOTES, 'UTF-8') ?>/assets/vendor/fonts/kanit/kanit.css" rel="stylesheet">
-    <link href="<?= htmlspecialchars(APP_URL, ENT_QUOTES, 'UTF-8') ?>/assets/vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet">
-    <link href="<?= htmlspecialchars(APP_URL, ENT_QUOTES, 'UTF-8') ?>/assets/vendor/bootstrap-icons/font/bootstrap-icons.css" rel="stylesheet">
+    <title>เข้าสู่ระบบ — <?= h(APP_NAME) ?></title>
+    <link href="<?= h(APP_URL) ?>/assets/vendor/fonts/kanit/kanit.css" rel="stylesheet">
+    <link href="<?= h(APP_URL) ?>/assets/vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet">
+    <link href="<?= h(APP_URL) ?>/assets/vendor/bootstrap-icons/font/bootstrap-icons.css" rel="stylesheet">
     <style>
         body {
             font-family: 'Kanit', system-ui, sans-serif;
@@ -138,8 +138,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 <div class="card login-card p-4 p-md-5">
                     <div class="text-center mb-4">
                         <span class="brand-icon mb-3"><i class="bi bi-shield-check"></i></span>
-                        <h1 class="h4 fw-semibold mb-1"><?= htmlspecialchars(APP_NAME, ENT_QUOTES, 'UTF-8') ?></h1>
-                        <p class="text-muted small mb-0">สำนักวิทยบริการและเทคโนโลยีสารสนเทศ (ARIT)</p>
+                        <h1 class="h4 fw-semibold mb-1"><?= h(APP_NAME) ?></h1>
+                        <p class="text-muted small mb-0"><?= h(ORG_FULL_NAME) ?></p>
                     </div>
 
                     <?php if ($timeout): ?>
@@ -152,7 +152,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     <?php if ($error !== ''): ?>
                         <div class="alert alert-danger small" role="alert">
                             <i class="bi bi-exclamation-triangle me-1"></i>
-                            <?= htmlspecialchars($error, ENT_QUOTES, 'UTF-8') ?>
+                            <?= h($error) ?>
                         </div>
                     <?php endif; ?>
 
@@ -162,7 +162,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             <label for="username" class="form-label small fw-medium">ชื่อผู้ใช้</label>
                             <input type="text" id="username" name="username" class="form-control"
                                    required autofocus autocomplete="username"
-                                   value="<?= htmlspecialchars($_POST['username'] ?? '', ENT_QUOTES, 'UTF-8') ?>">
+                                   value="<?= h($_POST['username'] ?? '') ?>">
                         </div>
                         <div class="mb-4">
                             <label for="password" class="form-label small fw-medium">รหัสผ่าน</label>

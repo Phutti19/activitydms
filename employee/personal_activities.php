@@ -32,368 +32,8 @@ function pa_split_dt($v): array {
 // ---------------------------------------------------------------------------
 // POST handlers
 // ---------------------------------------------------------------------------
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    // ตรวจ post_max_size: ถ้าเกินเพดาน PHP, $_POST/$_FILES จะว่าง CSRF จะ fail เงียบ ๆ
-    if (
-        empty($_POST) && empty($_FILES)
-        && (int)($_SERVER['CONTENT_LENGTH'] ?? 0) > 0
-    ) {
-        $limit = ini_get('post_max_size');
-        flash_set('error',
-            'ไฟล์/ข้อมูลที่ส่งใหญ่เกินเพดานเซิร์ฟเวอร์ (post_max_size = '
-            . $limit . ') — รัน dev server ด้วย "php -c php-dev.ini -S localhost:8000"'
-        );
-        header('Location: ' . APP_URL . '/employee/personal_activities.php');
-        exit;
-    }
-
-    verify_csrf_or_die();
-    $action = $_POST['action'] ?? '';
-
-    // ---- helper: process uploaded attachments for an activity owned by current user ----
-    $process_attachments = function(int $activity_id) use ($pdo): void {
-        if (empty($_FILES['attachments']) || !is_array($_FILES['attachments']['name'])) return;
-        $names = $_FILES['attachments']['name'];
-        $count = count($names);
-        if ($count === 0) return;
-
-        $existing = $pdo->prepare('SELECT COUNT(*) FROM activity_attachments WHERE activity_id = :a');
-        $existing->execute([':a' => $activity_id]);
-        $current_total = (int) $existing->fetchColumn();
-
-        $uploaded = 0;
-        for ($i = 0; $i < $count; $i++) {
-            if (($_FILES['attachments']['error'][$i] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) continue;
-            if ($current_total + $uploaded >= PA_ATTACH_MAX_FILES) {
-                flash_set('error', 'ไฟล์แนบเกินจำนวนสูงสุด (' . PA_ATTACH_MAX_FILES . ' ไฟล์ต่อกิจกรรม)');
-                break;
-            }
-
-            $one = [
-                'name'     => $_FILES['attachments']['name'][$i],
-                'type'     => $_FILES['attachments']['type'][$i],
-                'tmp_name' => $_FILES['attachments']['tmp_name'][$i],
-                'error'    => $_FILES['attachments']['error'][$i],
-                'size'     => $_FILES['attachments']['size'][$i],
-            ];
-
-            $result = validate_uploaded_file($one, UPLOAD_DOC_MIMES + UPLOAD_IMAGE_MIMES, PA_ATTACH_MAX_BYTES);
-            if (!$result['ok']) {
-                flash_set('error', 'อัปโหลด "' . $one['name'] . '": ' . $result['error']);
-                continue;
-            }
-
-            try {
-                $stored = move_uploaded_with_uuid($one, 'activities', $result['ext']);
-            } catch (Throwable) {
-                flash_set('error', 'บันทึกไฟล์ "' . $one['name'] . '" ไม่สำเร็จ');
-                continue;
-            }
-
-            $label = pathinfo((string)$one['name'], PATHINFO_FILENAME);
-            if (mb_strlen($label) > 200) $label = mb_substr($label, 0, 200);
-
-            $ins = $pdo->prepare(
-                'INSERT INTO activity_attachments (activity_id, type, label, filename)
-                 VALUES (:a, "file", :l, :f)'
-            );
-            $ins->execute([':a' => $activity_id, ':l' => $label, ':f' => $stored]);
-            audit_log('upload_personal_attachment', 'activity_attachments',
-                (int)$pdo->lastInsertId(), null,
-                ['activity_id' => $activity_id, 'label' => $label, 'filename' => $stored]);
-            $uploaded++;
-        }
-        if ($uploaded > 0) flash_set('success', 'อัปโหลดไฟล์แนบ ' . $uploaded . ' ไฟล์');
-    };
-
-    // ---- upload attachment(s) inline (จากการ์ดในหน้า list) ----
-    if ($action === 'upload_attachment') {
-        $act_id = (int)($_POST['activity_id'] ?? 0);
-        $own = $pdo->prepare(
-            'SELECT id, title FROM activities
-             WHERE id = :id AND scope = "personal" AND created_by = :u LIMIT 1'
-        );
-        $own->execute([':id' => $act_id, ':u' => $uid]);
-        $act_row = $own->fetch();
-        if (!$act_row) {
-            flash_set('error', 'ไม่พบกิจกรรมหรือไม่มีสิทธิ์แนบไฟล์');
-            header('Location: ' . APP_URL . '/employee/personal_activities.php');
-            exit;
-        }
-        $process_attachments($act_id);
-        header('Location: ' . APP_URL . '/employee/personal_activities.php');
-        exit;
-    }
-
-    // ---- delete attachment ----
-    if ($action === 'delete_attachment') {
-        $att_id = (int)($_POST['attachment_id'] ?? 0);
-        $own = $pdo->prepare(
-            'SELECT att.id, att.filename, att.label, a.id AS activity_id
-             FROM activity_attachments att
-             JOIN activities a ON a.id = att.activity_id
-             WHERE att.id = :id AND att.type = "file"
-               AND a.scope = "personal" AND a.created_by = :u
-             LIMIT 1'
-        );
-        $own->execute([':id' => $att_id, ':u' => $uid]);
-        $row = $own->fetch();
-        if ($row) {
-            $pdo->prepare('DELETE FROM activity_attachments WHERE id = :id')->execute([':id' => $att_id]);
-            if (!empty($row['filename'])) safe_unlink_upload('activities', (string)$row['filename']);
-            audit_log('delete_personal_attachment', 'activity_attachments', $att_id,
-                ['label' => $row['label'], 'filename' => $row['filename']], null);
-            flash_set('success', 'ลบไฟล์แนบสำเร็จ');
-        } else {
-            flash_set('error', 'ไม่พบไฟล์แนบหรือไม่มีสิทธิ์ลบ');
-        }
-        header('Location: ' . APP_URL . '/employee/personal_activities.php');
-        exit;
-    }
-
-    // ---- upload certificate ----
-    if ($action === 'upload_cert') {
-        $act_id = (int)($_POST['activity_id'] ?? 0);
-        $own = $pdo->prepare(
-            'SELECT id, title FROM activities
-             WHERE id = :id AND scope = "personal" AND created_by = :u LIMIT 1'
-        );
-        $own->execute([':id' => $act_id, ':u' => $uid]);
-        $act_row = $own->fetch();
-        if (!$act_row) {
-            flash_set('error', 'ไม่พบกิจกรรมหรือไม่มีสิทธิ์อัปโหลด');
-            header('Location: ' . APP_URL . '/employee/personal_activities.php');
-            exit;
-        }
-
-        $exists = $pdo->prepare(
-            'SELECT 1 FROM certificates WHERE activity_id = :a AND user_id = :u LIMIT 1'
-        );
-        $exists->execute([':a' => $act_id, ':u' => $uid]);
-        if ($exists->fetch()) {
-            flash_set('error', 'มีเกียรติบัตรของกิจกรรมนี้อยู่แล้ว — ลบของเดิมก่อนอัปโหลดใหม่');
-            header('Location: ' . APP_URL . '/employee/personal_activities.php');
-            exit;
-        }
-
-        $file = $_FILES['cert_file'] ?? null;
-        if (!$file) {
-            flash_set('error', 'ไม่ได้เลือกไฟล์');
-            header('Location: ' . APP_URL . '/employee/personal_activities.php');
-            exit;
-        }
-
-        $check = validate_uploaded_file($file, UPLOAD_CERT_MIMES, PA_CERT_PDF_MAX_BYTES);
-        if ($check['ok']) {
-            $per_limit = $check['ext'] === 'pdf' ? PA_CERT_PDF_MAX_BYTES : PA_CERT_IMG_MAX_BYTES;
-            if ($check['size'] > $per_limit) {
-                $max_mb = $check['ext'] === 'pdf' ? 10 : 5;
-                $check = ['ok' => false, 'error' => "ไฟล์ใหญ่เกิน {$max_mb} MB"];
-            }
-        }
-        if (!$check['ok']) {
-            flash_set('error', 'อัปโหลดเกียรติบัตรไม่สำเร็จ: ' . $check['error']);
-            header('Location: ' . APP_URL . '/employee/personal_activities.php');
-            exit;
-        }
-
-        $original_name = sanitize_download_filename((string)($file['name'] ?? ''));
-        if ($original_name === 'download') $original_name = 'certificate.' . $check['ext'];
-
-        try {
-            $filename = move_uploaded_with_uuid($file, 'certificates', $check['ext']);
-        } catch (Throwable $ex) {
-            flash_set('error', 'บันทึกไฟล์เกียรติบัตรไม่สำเร็จ');
-            header('Location: ' . APP_URL . '/employee/personal_activities.php');
-            exit;
-        }
-
-        try {
-            $ins = $pdo->prepare(
-                'INSERT INTO certificates
-                   (activity_id, user_id, filename, original_name, uploaded_by)
-                 VALUES (:a, :u, :f, :o, :by)'
-            );
-            $ins->execute([
-                ':a' => $act_id, ':u' => $uid,
-                ':f' => $filename, ':o' => $original_name, ':by' => $uid,
-            ]);
-            $cert_id = (int)$pdo->lastInsertId();
-            audit_log('upload_personal_certificate', 'certificates', $cert_id, null, [
-                'activity_id' => $act_id, 'filename' => $filename, 'original_name' => $original_name,
-            ]);
-            flash_set('success', 'อัปโหลดเกียรติบัตรของ "' . $act_row['title'] . '" สำเร็จ');
-        } catch (PDOException $e) {
-            // ลบไฟล์ที่ย้ายไปแล้ว เพื่อไม่ให้กลายเป็น orphan
-            safe_unlink_upload('certificates', $filename);
-            if ($e->getCode() === '23000') {
-                // UNIQUE(activity_id, user_id) — race condition จาก double-submit
-                flash_set('error', 'มีเกียรติบัตรของกิจกรรมนี้อยู่แล้ว — ลบของเดิมก่อนอัปโหลดใหม่');
-            } else {
-                error_log('[personal_activities.upload_cert] ' . $e->getMessage());
-                flash_set('error', 'บันทึกเกียรติบัตรไม่สำเร็จ');
-            }
-        }
-        header('Location: ' . APP_URL . '/employee/personal_activities.php');
-        exit;
-    }
-
-    // ---- delete certificate ----
-    if ($action === 'delete_cert') {
-        $cert_id = (int)($_POST['cert_id'] ?? 0);
-        $own = $pdo->prepare(
-            'SELECT c.id, c.filename, c.original_name, a.title
-             FROM certificates c
-             JOIN activities a ON a.id = c.activity_id
-             WHERE c.id = :id
-               AND c.user_id = :u1
-               AND a.scope = "personal" AND a.created_by = :u2
-             LIMIT 1'
-        );
-        $own->execute([':id' => $cert_id, ':u1' => $uid, ':u2' => $uid]);
-        $row = $own->fetch();
-        if ($row) {
-            $pdo->prepare('DELETE FROM certificates WHERE id = :id')->execute([':id' => $cert_id]);
-            if (!empty($row['filename'])) safe_unlink_upload('certificates', (string)$row['filename']);
-            audit_log('delete_personal_certificate', 'certificates', $cert_id,
-                ['filename' => $row['filename'], 'original_name' => $row['original_name']], null);
-            flash_set('success', 'ลบเกียรติบัตรสำเร็จ');
-        } else {
-            flash_set('error', 'ไม่พบเกียรติบัตรหรือไม่มีสิทธิ์ลบ');
-        }
-        header('Location: ' . APP_URL . '/employee/personal_activities.php');
-        exit;
-    }
-
-    // ---- create / update ----
-    if ($action === 'save') {
-        $edit_id     = (int)($_POST['edit_id'] ?? 0);
-        $is_edit     = $edit_id > 0;
-
-        $title       = trim((string)($_POST['title'] ?? ''));
-        $description = trim((string)($_POST['description'] ?? ''));
-        $location    = trim((string)($_POST['location'] ?? ''));
-        $type_id     = (int)($_POST['activity_type_id'] ?? 0);
-        $format      = trim((string)($_POST['format'] ?? 'onsite'));
-        $fiscal_id   = (int)($_POST['fiscal_year_id'] ?? 0);
-        $start_date   = trim((string)($_POST['start_date']   ?? ''));
-        $start_hour   = trim((string)($_POST['start_hour']   ?? ''));
-        $start_minute = trim((string)($_POST['start_minute'] ?? ''));
-        $end_date     = trim((string)($_POST['end_date']     ?? ''));
-        $end_hour     = trim((string)($_POST['end_hour']     ?? ''));
-        $end_minute   = trim((string)($_POST['end_minute']   ?? ''));
-        $start_raw = $start_date . ' ' . $start_hour . ':' . $start_minute . ':00';
-        $end_raw   = $end_date   . ' ' . $end_hour   . ':' . $end_minute   . ':00';
-
-        $errors = [];
-        if ($title === '' || mb_strlen($title) > 255) $errors[] = 'กรุณากรอกชื่อกิจกรรม (ไม่เกิน 255 ตัวอักษร)';
-
-        $chk_type = $pdo->prepare('SELECT 1 FROM activity_types WHERE id = :id AND is_active = 1 LIMIT 1');
-        $chk_type->execute([':id' => $type_id]);
-        if (!$chk_type->fetch()) $errors[] = 'ประเภทกิจกรรมไม่ถูกต้อง';
-
-        $chk_fy = $pdo->prepare('SELECT 1 FROM fiscal_years WHERE id = :id LIMIT 1');
-        $chk_fy->execute([':id' => $fiscal_id]);
-        if (!$chk_fy->fetch()) $errors[] = 'ปีงบประมาณไม่ถูกต้อง';
-
-        if (!in_array($format, PA_VALID_FORMATS, true)) $errors[] = 'รูปแบบกิจกรรมไม่ถูกต้อง';
-
-        if (!preg_match('/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/', $start_raw)) $errors[] = 'วันเวลาเริ่มต้นไม่ถูกต้อง';
-        if (!preg_match('/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/', $end_raw))   $errors[] = 'วันเวลาสิ้นสุดไม่ถูกต้อง';
-        if (empty($errors) && strtotime($start_raw) > strtotime($end_raw)) {
-            $errors[] = 'วันเวลาสิ้นสุดต้องไม่ก่อนวันเวลาเริ่มต้น';
-        }
-
-        if ($errors) {
-            foreach ($errors as $e) flash_set('error', $e);
-            header('Location: ' . APP_URL . '/employee/personal_activities.php');
-            exit;
-        }
-
-        if (!$is_edit) {
-            $stmt = $pdo->prepare(
-                'INSERT INTO activities
-                    (title, description, location, activity_type_id, format, fiscal_year_id,
-                     scope, is_open_registration, start_datetime, end_datetime, created_by)
-                 VALUES (:t,:desc,:loc,:type,:fmt,:fy,"personal",0,:s,:e,:cb)'
-            );
-            $stmt->execute([
-                ':t'=>$title, ':desc'=>$description, ':loc'=>$location,
-                ':type'=>$type_id, ':fmt'=>$format, ':fy'=>$fiscal_id,
-                ':s'=>$start_raw, ':e'=>$end_raw, ':cb'=>$uid,
-            ]);
-            $new_id = (int)$pdo->lastInsertId();
-            audit_log('create_personal_activity', 'activities', $new_id, null, [
-                'title'=>$title, 'scope'=>'personal',
-            ]);
-            flash_set('success', 'สร้างกิจกรรมส่วนตัว "' . $title . '" สำเร็จ');
-            $process_attachments($new_id);
-        } else {
-            // ตรวจว่าเป็นของ user คนนี้จริง
-            $own = $pdo->prepare(
-                'SELECT id FROM activities WHERE id = :id AND scope = "personal" AND created_by = :u LIMIT 1'
-            );
-            $own->execute([':id'=>$edit_id, ':u'=>$uid]);
-            if (!$own->fetch()) {
-                flash_set('error', 'ไม่พบกิจกรรมหรือไม่มีสิทธิ์แก้ไข');
-                header('Location: ' . APP_URL . '/employee/personal_activities.php');
-                exit;
-            }
-            $upd = $pdo->prepare(
-                'UPDATE activities SET
-                    title=:t, description=:desc, location=:loc,
-                    activity_type_id=:type, format=:fmt, fiscal_year_id=:fy,
-                    start_datetime=:s, end_datetime=:e
-                 WHERE id=:id AND scope="personal" AND created_by=:u'
-            );
-            $upd->execute([
-                ':t'=>$title, ':desc'=>$description, ':loc'=>$location,
-                ':type'=>$type_id, ':fmt'=>$format, ':fy'=>$fiscal_id,
-                ':s'=>$start_raw, ':e'=>$end_raw,
-                ':id'=>$edit_id, ':u'=>$uid,
-            ]);
-            audit_log('update_personal_activity', 'activities', $edit_id, null, ['title'=>$title]);
-            flash_set('success', 'แก้ไขกิจกรรม "' . $title . '" สำเร็จ');
-            $process_attachments($edit_id);
-        }
-
-        header('Location: ' . APP_URL . '/employee/personal_activities.php');
-        exit;
-    }
-
-    // ---- delete ----
-    if ($action === 'delete') {
-        $del_id = (int)($_POST['del_id'] ?? 0);
-        $own = $pdo->prepare(
-            'SELECT id, title FROM activities WHERE id = :id AND scope = "personal" AND created_by = :u LIMIT 1'
-        );
-        $own->execute([':id'=>$del_id, ':u'=>$uid]);
-        $row = $own->fetch();
-        if ($row) {
-            // เก็บรายชื่อไฟล์ก่อน เพื่อลบใน disk หลัง CASCADE DELETE
-            $files = $pdo->prepare(
-                'SELECT filename FROM activity_attachments
-                 WHERE activity_id = :a AND type = "file" AND filename IS NOT NULL'
-            );
-            $files->execute([':a' => $del_id]);
-            $filenames = $files->fetchAll(PDO::FETCH_COLUMN);
-
-            $pdo->prepare('DELETE FROM activities WHERE id = :id')->execute([':id'=>$del_id]);
-
-            foreach ($filenames as $fn) {
-                if (!empty($fn)) safe_unlink_upload('activities', (string)$fn);
-            }
-
-            audit_log('delete_personal_activity', 'activities', $del_id, ['title'=>$row['title']], null);
-            flash_set('success', 'ลบกิจกรรม "' . $row['title'] . '" สำเร็จ');
-        }
-        header('Location: ' . APP_URL . '/employee/personal_activities.php');
-        exit;
-    }
-
-    header('Location: ' . APP_URL . '/employee/personal_activities.php');
-    exit;
-}
+// POST action handler แยกไป _personal_activities_post.php
+require __DIR__ . '/_personal_activities_post.php';
 
 // ---------------------------------------------------------------------------
 // GET — list
@@ -454,9 +94,9 @@ if (!empty($activities)) {
     $ids = array_map(fn($a) => (int)$a['id'], $activities);
     $placeholders = implode(',', array_fill(0, count($ids), '?'));
     $att_stmt = $pdo->prepare(
-        "SELECT id, activity_id, label, filename
+        "SELECT id, activity_id, type, label, filename, url
          FROM activity_attachments
-         WHERE type = 'file' AND activity_id IN ($placeholders)
+         WHERE activity_id IN ($placeholders)
          ORDER BY id ASC"
     );
     $att_stmt->execute($ids);
@@ -496,11 +136,6 @@ $years = $years_stmt->fetchAll();
 
 $default_fy_id = active_fiscal_year_id();
 
-function pa_fmt_date(string $dt): string {
-    $ts = strtotime($dt);
-    $m  = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
-    return date('j', $ts) . ' ' . $m[(int)date('n', $ts)-1] . ' ' . (date('Y', $ts)+543) . ', ' . date('H:i', $ts);
-}
 
 $page_title  = 'กิจกรรมส่วนตัว';
 $page_active = 'personal_activities';
@@ -519,14 +154,14 @@ require __DIR__ . '/../includes/header.php';
     </button>
 </div>
 
-<form method="GET" class="card p-3 mb-3">
+<form method="GET" class="card p-3 mb-3" data-autofilter>
     <div class="row g-2 align-items-end">
         <div class="col-12 col-md-6 col-lg-3">
             <label class="form-label small text-muted mb-1">
                 <i class="bi bi-search"></i> ค้นหา
             </label>
             <input type="text" name="q" class="form-control" placeholder="ชื่อ / สถานที่ / รายละเอียด"
-                   value="<?= htmlspecialchars($q, ENT_QUOTES, 'UTF-8') ?>">
+                   value="<?= h($q) ?>">
         </div>
         <div class="col-6 col-md-3 col-lg-2">
             <label class="form-label small text-muted mb-1">ประเภท</label>
@@ -534,7 +169,7 @@ require __DIR__ . '/../includes/header.php';
                 <option value="0">— ทั้งหมด —</option>
                 <?php foreach ($types as $t): ?>
                 <option value="<?= (int)$t['id'] ?>" <?= $f_type === (int)$t['id'] ? 'selected' : '' ?>>
-                    <?= htmlspecialchars($t['name'], ENT_QUOTES, 'UTF-8') ?>
+                    <?= h($t['name']) ?>
                 </option>
                 <?php endforeach; ?>
             </select>
@@ -545,7 +180,7 @@ require __DIR__ . '/../includes/header.php';
                 <option value="0">— ทั้งหมด —</option>
                 <?php foreach ($years as $y): ?>
                 <option value="<?= (int)$y['id'] ?>" <?= $f_fiscal === (int)$y['id'] ? 'selected' : '' ?>>
-                    <?= htmlspecialchars($y['name'], ENT_QUOTES, 'UTF-8') ?>
+                    <?= h($y['name']) ?>
                 </option>
                 <?php endforeach; ?>
             </select>
@@ -572,7 +207,7 @@ require __DIR__ . '/../includes/header.php';
                 <i class="bi bi-search"></i>
             </button>
             <?php if ($has_filter): ?>
-            <a href="<?= htmlspecialchars(APP_URL, ENT_QUOTES, 'UTF-8') ?>/employee/personal_activities.php"
+            <a href="<?= h(APP_URL) ?>/employee/personal_activities.php"
                class="btn btn-outline-secondary flex-grow-1" title="ล้างตัวกรอง">
                 <i class="bi bi-x-lg"></i>
             </a>
@@ -602,15 +237,15 @@ require __DIR__ . '/../includes/header.php';
     $ts_fg = $e < $now ? '#065F46' : ($s <= $now ? '#92400E' : '#1E40AF');
 ?>
 <div class="col-12 col-md-6 col-lg-4">
-    <div class="card h-100" style="border-left: 4px solid <?= htmlspecialchars($color, ENT_QUOTES, 'UTF-8') ?>;">
+    <div class="card h-100" style="border-left: 4px solid <?= h($color) ?>;">
         <div class="card-body d-flex flex-column gap-2">
             <div class="d-flex justify-content-between align-items-start gap-2">
                 <h6 class="fw-semibold mb-0 lh-sm">
-                    <?= htmlspecialchars($a['title'], ENT_QUOTES, 'UTF-8') ?>
+                    <?= h($a['title']) ?>
                 </h6>
                 <span class="badge"
-                      style="background:<?= htmlspecialchars($color, ENT_QUOTES, 'UTF-8') ?>;white-space:nowrap;flex-shrink:0;">
-                    <?= htmlspecialchars($a['type_name'] ?? '—', ENT_QUOTES, 'UTF-8') ?>
+                      style="background:<?= h($color) ?>;white-space:nowrap;flex-shrink:0;">
+                    <?= h($a['type_name'] ?? '—') ?>
                 </span>
             </div>
             <div>
@@ -626,18 +261,18 @@ require __DIR__ . '/../includes/header.php';
             </div>
             <?php if (!empty($a['description'])): ?>
             <p class="small text-muted mb-0 text-truncate-2">
-                <?= htmlspecialchars($a['description'], ENT_QUOTES, 'UTF-8') ?>
+                <?= h($a['description']) ?>
             </p>
             <?php endif; ?>
             <div class="small text-muted">
                 <i class="bi bi-clock me-1"></i>
-                <?= htmlspecialchars(pa_fmt_date($a['start_datetime']), ENT_QUOTES, 'UTF-8') ?><br>
-                <span class="ms-3">— <?= htmlspecialchars(pa_fmt_date($a['end_datetime']), ENT_QUOTES, 'UTF-8') ?></span>
+                <?= h(th_datetime($a['start_datetime'])) ?><br>
+                <span class="ms-3">— <?= h(th_datetime($a['end_datetime'])) ?></span>
             </div>
             <?php if (!empty($a['location'])): ?>
             <div class="small text-muted">
                 <i class="bi bi-geo-alt me-1"></i>
-                <?= htmlspecialchars($a['location'], ENT_QUOTES, 'UTF-8') ?>
+                <?= h($a['location']) ?>
             </div>
             <?php endif; ?>
 
@@ -654,7 +289,7 @@ require __DIR__ . '/../includes/header.php';
                 </span>
                 <span class="badge rounded-pill bg-light text-dark border d-inline-flex align-items-center gap-1 fw-normal">
                     <i class="bi bi-paperclip <?= $att_count > 0 ? 'text-primary' : 'text-muted' ?>"></i>
-                    ไฟล์แนบ <?= $att_count ?>/<?= PA_ATTACH_MAX_FILES ?>
+                    ไฟล์/ลิงก์ <?= $att_count ?>/<?= PA_ATTACH_MAX_FILES ?>
                 </span>
             </div>
 
@@ -672,27 +307,27 @@ require __DIR__ . '/../includes/header.php';
                     <button type="button" class="btn btn-sm btn-outline-primary edit-btn"
                             data-bs-toggle="modal" data-bs-target="#activityModal"
                             data-id="<?= (int)$a['id'] ?>"
-                            data-title="<?= htmlspecialchars($a['title'], ENT_QUOTES, 'UTF-8') ?>"
-                            data-description="<?= htmlspecialchars($a['description'] ?? '', ENT_QUOTES, 'UTF-8') ?>"
-                            data-location="<?= htmlspecialchars($a['location'] ?? '', ENT_QUOTES, 'UTF-8') ?>"
+                            data-title="<?= h($a['title']) ?>"
+                            data-description="<?= h($a['description'] ?? '') ?>"
+                            data-location="<?= h($a['location'] ?? '') ?>"
                             data-type="<?= (int)$a['activity_type_id'] ?>"
                             data-fiscal="<?= (int)$a['fiscal_year_id'] ?>"
-                            data-format="<?= htmlspecialchars((string)($a['format'] ?? 'onsite'), ENT_QUOTES, 'UTF-8') ?>"
+                            data-format="<?= h((string)($a['format'] ?? 'onsite')) ?>"
                             <?php
                             [$pa_sd, $pa_sh, $pa_sm] = pa_split_dt((string)$a['start_datetime']);
                             [$pa_ed, $pa_eh, $pa_em] = pa_split_dt((string)$a['end_datetime']);
                             ?>
-                            data-start-date="<?= htmlspecialchars($pa_sd, ENT_QUOTES, 'UTF-8') ?>"
-                            data-start-hour="<?= htmlspecialchars($pa_sh, ENT_QUOTES, 'UTF-8') ?>"
-                            data-start-minute="<?= htmlspecialchars($pa_sm, ENT_QUOTES, 'UTF-8') ?>"
-                            data-end-date="<?= htmlspecialchars($pa_ed, ENT_QUOTES, 'UTF-8') ?>"
-                            data-end-hour="<?= htmlspecialchars($pa_eh, ENT_QUOTES, 'UTF-8') ?>"
-                            data-end-minute="<?= htmlspecialchars($pa_em, ENT_QUOTES, 'UTF-8') ?>"
+                            data-start-date="<?= h($pa_sd) ?>"
+                            data-start-hour="<?= h($pa_sh) ?>"
+                            data-start-minute="<?= h($pa_sm) ?>"
+                            data-end-date="<?= h($pa_ed) ?>"
+                            data-end-hour="<?= h($pa_eh) ?>"
+                            data-end-minute="<?= h($pa_em) ?>"
                             title="แก้ไข">
                         <i class="bi bi-pencil"></i>
                     </button>
                     <form method="POST" class="d-inline"
-                          onsubmit="return confirm('ลบ &quot;<?= htmlspecialchars($a['title'], ENT_QUOTES, 'UTF-8') ?>&quot;?');">
+                          onsubmit="return confirm('ลบ &quot;<?= h($a['title']) ?>&quot;?');">
                         <?= csrf_field() ?>
                         <input type="hidden" name="action" value="delete">
                         <input type="hidden" name="del_id" value="<?= (int)$a['id'] ?>">
@@ -713,7 +348,7 @@ require __DIR__ . '/../includes/header.php';
             <div class="modal-header">
                 <h5 class="modal-title">
                     <i class="bi bi-folder2-open me-1"></i>
-                    จัดการไฟล์ — <?= htmlspecialchars($a['title'], ENT_QUOTES, 'UTF-8') ?>
+                    จัดการไฟล์ — <?= h($a['title']) ?>
                 </h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
@@ -725,14 +360,14 @@ require __DIR__ . '/../includes/header.php';
                     </div>
                     <?php if ($cert): ?>
                     <div class="d-flex align-items-center justify-content-between gap-2 small p-2 border rounded">
-                        <a href="<?= htmlspecialchars(APP_URL, ENT_QUOTES, 'UTF-8') ?>/api/download.php?type=cert&id=<?= (int)$cert['id'] ?>"
+                        <a href="<?= h(APP_URL) ?>/api/download.php?type=cert&id=<?= (int)$cert['id'] ?>"
                            class="text-decoration-none text-truncate" target="_blank" rel="noopener"
-                           title="<?= htmlspecialchars($cert['original_name'], ENT_QUOTES, 'UTF-8') ?>">
+                           title="<?= h($cert['original_name']) ?>">
                             <i class="bi bi-file-earmark-check me-1 text-warning"></i>
-                            <?= htmlspecialchars($cert['original_name'], ENT_QUOTES, 'UTF-8') ?>
+                            <?= h($cert['original_name']) ?>
                         </a>
                         <form method="POST" class="m-0"
-                              onsubmit="return confirm('ลบเกียรติบัตรของ &quot;<?= htmlspecialchars($a['title'], ENT_QUOTES, 'UTF-8') ?>&quot;?');">
+                              onsubmit="return confirm('ลบเกียรติบัตรของ &quot;<?= h($a['title']) ?>&quot;?');">
                             <?= csrf_field() ?>
                             <input type="hidden" name="action" value="delete_cert">
                             <input type="hidden" name="cert_id" value="<?= (int)$cert['id'] ?>">
@@ -756,30 +391,51 @@ require __DIR__ . '/../includes/header.php';
                     <?php endif; ?>
                 </section>
 
-                <!-- ไฟล์แนบ -->
+                <!-- ไฟล์แนบและลิงก์ -->
                 <section>
-                    <div class="fw-medium mb-2">
-                        <i class="bi bi-paperclip text-primary"></i>
-                        ไฟล์แนบ (<?= $att_count ?>/<?= PA_ATTACH_MAX_FILES ?>)
+                    <div class="d-flex align-items-center justify-content-between mb-2">
+                        <span class="fw-medium">
+                            <i class="bi bi-paperclip text-primary me-1"></i>ไฟล์แนบและลิงก์
+                        </span>
+                        <span class="badge bg-light text-dark border"><?= $att_count ?>/<?= PA_ATTACH_MAX_FILES ?></span>
                     </div>
+
                     <?php if ($att_count > 0): ?>
-                    <ul class="list-unstyled mb-2 small d-flex flex-column gap-1">
+                    <ul class="list-group list-group-flush border rounded mb-3 small overflow-hidden">
                     <?php foreach ($atts as $att):
-                        $att_label = trim((string)$att['label']) !== '' ? $att['label'] : 'ไฟล์แนบ';
-                        $att_label_safe = htmlspecialchars($att_label, ENT_QUOTES, 'UTF-8');
+                        $att_is_link  = (($att['type'] ?? 'file') === 'url');
+                        $att_label    = trim((string)$att['label']) !== '' ? $att['label'] : ($att_is_link ? 'ลิงก์' : 'ไฟล์แนบ');
+                        $att_label_safe = h($att_label);
+                        if ($att_is_link) {
+                            $att_href     = h((string)($att['url'] ?? ''));
+                            $att_icon     = 'bi-link-45deg';
+                            $att_icon_bg  = 'bg-success-subtle text-success';
+                            $att_sub      = h((string)($att['url'] ?? ''));
+                        } else {
+                            $att_href     = h(APP_URL) . '/api/download.php?type=attachment&id=' . (int)$att['id'];
+                            $att_icon     = 'bi-file-earmark-text';
+                            $att_icon_bg  = 'bg-primary-subtle text-primary';
+                            $att_sub      = 'ไฟล์แนบ';
+                        }
                     ?>
-                        <li class="d-flex align-items-center justify-content-between gap-2 p-2 border rounded">
-                            <a href="<?= htmlspecialchars(APP_URL, ENT_QUOTES, 'UTF-8') ?>/api/download.php?type=attachment&id=<?= (int)$att['id'] ?>"
-                               class="text-decoration-none text-truncate" target="_blank" rel="noopener"
-                               title="<?= $att_label_safe ?>">
-                                <i class="bi bi-file-earmark-text me-1"></i><?= $att_label_safe ?>
+                        <li class="list-group-item d-flex align-items-center gap-2 py-2 px-2">
+                            <span class="d-inline-flex align-items-center justify-content-center rounded <?= $att_icon_bg ?>"
+                                  style="width:32px;height:32px;flex-shrink:0;">
+                                <i class="bi <?= $att_icon ?>" style="font-size:18px;"></i>
+                            </span>
+                            <a href="<?= $att_href ?>"
+                               class="text-decoration-none flex-grow-1" style="min-width:0;"
+                               target="_blank" rel="noopener noreferrer"
+                               title="<?= $att_sub ?>">
+                                <div class="text-truncate fw-medium"><?= $att_label_safe ?></div>
+                                <div class="text-truncate text-muted small"><?= $att_sub ?></div>
                             </a>
-                            <form method="POST" class="m-0"
-                                  onsubmit="return confirm('ลบไฟล์แนบ &quot;<?= $att_label_safe ?>&quot;?');">
+                            <form method="POST" class="m-0 flex-shrink-0"
+                                  onsubmit="return confirm('ลบ &quot;<?= $att_label_safe ?>&quot;?');">
                                 <?= csrf_field() ?>
                                 <input type="hidden" name="action" value="delete_attachment">
                                 <input type="hidden" name="attachment_id" value="<?= (int)$att['id'] ?>">
-                                <button type="submit" class="btn btn-sm btn-outline-danger" title="ลบไฟล์">
+                                <button type="submit" class="btn btn-sm btn-link text-danger p-1" title="ลบ">
                                     <i class="bi bi-trash"></i>
                                 </button>
                             </form>
@@ -787,29 +443,69 @@ require __DIR__ . '/../includes/header.php';
                     <?php endforeach; ?>
                     </ul>
                     <?php else: ?>
-                    <p class="small text-muted mb-2">ยังไม่มีไฟล์แนบ</p>
+                    <div class="text-center text-muted small py-3 mb-3 border rounded bg-light">
+                        <i class="bi bi-inbox" style="font-size:24px;opacity:0.5;"></i>
+                        <div class="mt-1">ยังไม่มีไฟล์แนบหรือลิงก์</div>
+                    </div>
                     <?php endif; ?>
 
                     <?php if ($att_remaining > 0): ?>
-                    <form method="POST" enctype="multipart/form-data"
-                          class="d-flex gap-2 align-items-center attach-add-form">
-                        <?= csrf_field() ?>
-                        <input type="hidden" name="action" value="upload_attachment">
-                        <input type="hidden" name="activity_id" value="<?= (int)$a['id'] ?>">
-                        <input type="file" name="attachments[]" class="form-control form-control-sm attach-add-input"
-                               multiple
-                               accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.jpg,.jpeg,.png,.webp"
-                               required>
-                        <button type="submit" class="btn btn-sm btn-primary flex-shrink-0">
-                            <i class="bi bi-plus-lg me-1"></i> เพิ่ม
-                        </button>
-                    </form>
-                    <div class="form-text small">
-                        เพิ่มได้อีก <?= $att_remaining ?> ไฟล์ — สูงสุด 10 MB ต่อไฟล์
+                    <ul class="nav nav-pills nav-fill gap-1 mb-2" role="tablist">
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link active py-1 px-2 small" data-bs-toggle="tab"
+                                    data-bs-target="#addFile-<?= (int)$a['id'] ?>" type="button" role="tab">
+                                <i class="bi bi-file-earmark-arrow-up me-1"></i> เพิ่มไฟล์
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link py-1 px-2 small" data-bs-toggle="tab"
+                                    data-bs-target="#addLink-<?= (int)$a['id'] ?>" type="button" role="tab">
+                                <i class="bi bi-link-45deg me-1"></i> เพิ่มลิงก์
+                            </button>
+                        </li>
+                    </ul>
+                    <div class="tab-content border rounded p-2 bg-light" style="min-height:7.5rem;">
+                        <div class="tab-pane fade show active" id="addFile-<?= (int)$a['id'] ?>" role="tabpanel">
+                            <form method="POST" enctype="multipart/form-data"
+                                  class="d-flex gap-2 align-items-center attach-add-form mb-1">
+                                <?= csrf_field() ?>
+                                <input type="hidden" name="action" value="upload_attachment">
+                                <input type="hidden" name="activity_id" value="<?= (int)$a['id'] ?>">
+                                <input type="file" name="attachments[]" class="form-control form-control-sm attach-add-input"
+                                       multiple
+                                       accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.jpg,.jpeg,.png,.webp"
+                                       required>
+                                <button type="submit" class="btn btn-sm btn-primary flex-shrink-0">
+                                    <i class="bi bi-upload me-1"></i> อัปโหลด
+                                </button>
+                            </form>
+                            <div class="form-text small mb-0">PDF/Word/Excel/PPT/รูป — สูงสุด 10 MB ต่อไฟล์</div>
+                        </div>
+                        <div class="tab-pane fade" id="addLink-<?= (int)$a['id'] ?>" role="tabpanel">
+                            <form method="POST" class="d-flex flex-column gap-2 mb-1">
+                                <?= csrf_field() ?>
+                                <input type="hidden" name="action" value="add_link">
+                                <input type="hidden" name="activity_id" value="<?= (int)$a['id'] ?>">
+                                <input type="text" name="link_label" class="form-control form-control-sm"
+                                       maxlength="100" required placeholder="ชื่อลิงก์ เช่น Zoom นัด Q1">
+                                <div class="d-flex gap-2 align-items-center">
+                                    <input type="url" name="link_url" class="form-control form-control-sm"
+                                           maxlength="500" required pattern="https://.*"
+                                           placeholder="https://...">
+                                    <button type="submit" class="btn btn-sm btn-success flex-shrink-0">
+                                        <i class="bi bi-plus-lg me-1"></i> เพิ่ม
+                                    </button>
+                                </div>
+                            </form>
+                            <div class="form-text small mb-0">ต้องเป็น https:// เท่านั้น</div>
+                        </div>
+                    </div>
+                    <div class="form-text small text-end mt-1">
+                        เหลือ <?= $att_remaining ?> รายการ (รวมไฟล์ + ลิงก์)
                     </div>
                     <?php else: ?>
                     <div class="alert alert-warning small mb-0 py-2">
-                        <i class="bi bi-info-circle"></i> ครบจำนวนสูงสุด <?= PA_ATTACH_MAX_FILES ?> ไฟล์แล้ว
+                        <i class="bi bi-info-circle"></i> ครบจำนวนสูงสุด <?= PA_ATTACH_MAX_FILES ?> รายการแล้ว
                     </div>
                     <?php endif; ?>
                 </section>
@@ -847,7 +543,7 @@ require __DIR__ . '/../includes/header.php';
                             <option value="">— เลือกประเภท —</option>
                             <?php foreach ($types as $t): ?>
                             <option value="<?= (int)$t['id'] ?>">
-                                <?= htmlspecialchars($t['name'], ENT_QUOTES, 'UTF-8') ?>
+                                <?= h($t['name']) ?>
                             </option>
                             <?php endforeach; ?>
                         </select>
@@ -859,7 +555,7 @@ require __DIR__ . '/../includes/header.php';
                             <?php foreach ($years as $y): ?>
                             <option value="<?= (int)$y['id'] ?>"
                                     <?= ($default_fy_id !== null && (int)$y['id'] === $default_fy_id) ? 'selected' : '' ?>>
-                                <?= htmlspecialchars($y['name'], ENT_QUOTES, 'UTF-8') ?>
+                                <?= h($y['name']) ?>
                             </option>
                             <?php endforeach; ?>
                         </select>
@@ -867,11 +563,11 @@ require __DIR__ . '/../includes/header.php';
                     <div class="col-12 col-md-6">
                         <label class="form-label fw-medium d-block">รูปแบบ <span class="text-danger">*</span></label>
                         <div class="btn-group w-100" role="group" aria-label="รูปแบบกิจกรรม">
-                            <input type="radio" class="btn-check" name="format" id="paFmtOnsite" value="onsite" checked required>
+                            <input type="radio" class="btn-check" name="format" id="paFmtOnsite" value="onsite" autocomplete="off" checked required>
                             <label class="btn btn-outline-primary" for="paFmtOnsite">
                                 <i class="bi bi-geo-alt me-1"></i> ออนไซต์
                             </label>
-                            <input type="radio" class="btn-check" name="format" id="paFmtOnline" value="online">
+                            <input type="radio" class="btn-check" name="format" id="paFmtOnline" value="online" autocomplete="off">
                             <label class="btn btn-outline-primary" for="paFmtOnline">
                                 <i class="bi bi-camera-video me-1"></i> ออนไลน์
                             </label>
@@ -966,59 +662,8 @@ require __DIR__ . '/../includes/header.php';
 </div>
 
 <script>
-// ใช้ event delegation + show.bs.modal เพื่อให้ Bootstrap เป็นคนเปิด modal เอง (กัน race + ทำงานได้แม้ปุ่มถูก render ใหม่)
-const activityModalEl = document.getElementById('activityModal');
-const fAttachLabel    = document.getElementById('fAttachLabel');
-
-document.addEventListener('click', (ev) => {
-    const btn = ev.target.closest('.edit-btn');
-    if (!btn) return;
-    const d = btn.dataset;
-    document.getElementById('modalEditId').value  = d.id || '0';
-    document.getElementById('fTitle').value       = d.title || '';
-    document.getElementById('fDesc').value        = d.description || '';
-    document.getElementById('fLocation').value    = d.location || '';
-    document.getElementById('fType').value        = d.type || '';
-    document.getElementById('fFiscal').value      = d.fiscal || '';
-    document.getElementById('fStartDate').value   = d.startDate   || '';
-    document.getElementById('fStartHour').value   = d.startHour   || '';
-    document.getElementById('fStartMinute').value = d.startMinute || '';
-    document.getElementById('fEndDate').value     = d.endDate     || '';
-    document.getElementById('fEndHour').value     = d.endHour     || '';
-    document.getElementById('fEndMinute').value   = d.endMinute   || '';
-    const fmt = (d.format === 'online') ? 'online' : 'onsite';
-    const rb  = document.querySelector('input[name="format"][value="' + fmt + '"]');
-    if (rb) rb.checked = true;
-    document.getElementById('modalTitle').textContent = 'แก้ไขกิจกรรมส่วนตัว';
-    fAttachLabel.textContent = 'ไฟล์แนบ (เพิ่มไฟล์ใหม่)';
-});
-
-document.querySelectorAll('[data-mode="create"]').forEach((btn) => {
-    btn.addEventListener('click', () => {
-        fAttachLabel.textContent = 'ไฟล์แนบ';
-    });
-});
-
-// แก้ Bootstrap 5 a11y: ย้าย focus ออกจาก modal ก่อนตั้ง aria-hidden
-activityModalEl.addEventListener('hide.bs.modal', () => {
-    if (activityModalEl.contains(document.activeElement)) {
-        document.activeElement.blur();
-    }
-});
-
-activityModalEl.addEventListener('hidden.bs.modal', () => {
-    document.getElementById('modalEditId').value = '0';
-    activityModalEl.querySelector('form').reset();
-    document.getElementById('modalTitle').textContent = 'สร้างกิจกรรมส่วนตัว';
-    fAttachLabel.textContent = 'ไฟล์แนบ';
-});
-
-// Client-side preflight: เตือนถ้าไฟล์เกินเพดาน server (อ่านจาก data-server-limit)
-const fAttach        = document.getElementById('fAttach');
-const fAttachHint    = document.getElementById('fAttachServerHint');
-const fAttachLimitEl = document.getElementById('fAttachServerLimit');
-const SERVER_UPLOAD_LIMIT_BYTES = <?= (int) (
-    (function (): int {
+window.PERSONAL_ACTIVITIES = {
+    uploadLimitBytes: <?= (int) (function (): int {
         $v = ini_get('upload_max_filesize');
         if (!$v) return 0;
         $unit = strtolower(substr($v, -1));
@@ -1029,28 +674,10 @@ const SERVER_UPLOAD_LIMIT_BYTES = <?= (int) (
             'k' => $num * 1024,
             default => $num,
         };
-    })()
-) ?>;
-const SERVER_UPLOAD_LIMIT_LABEL = '<?= htmlspecialchars((string) ini_get('upload_max_filesize'), ENT_QUOTES, 'UTF-8') ?>';
-if (SERVER_UPLOAD_LIMIT_BYTES > 0 && SERVER_UPLOAD_LIMIT_BYTES < (10 * 1024 * 1024)) {
-    fAttachLimitEl.textContent = SERVER_UPLOAD_LIMIT_LABEL;
-    fAttachHint.classList.remove('d-none');
-}
-function checkOversize(input) {
-    if (!input.files || !input.files.length) return;
-    if (SERVER_UPLOAD_LIMIT_BYTES <= 0) return;
-    const tooBig = Array.from(input.files).filter(f => f.size > SERVER_UPLOAD_LIMIT_BYTES);
-    if (tooBig.length) {
-        alert('ไฟล์ต่อไปนี้ใหญ่เกินเพดานเซิร์ฟเวอร์ (' + SERVER_UPLOAD_LIMIT_LABEL + '):\n\n'
-              + tooBig.map(f => '• ' + f.name + ' (' + (f.size/1024/1024).toFixed(1) + ' MB)').join('\n'));
-        input.value = '';
-    }
-}
-fAttach.addEventListener('change', () => checkOversize(fAttach));
-document.querySelectorAll('.attach-add-input').forEach((el) => {
-    el.addEventListener('change', () => checkOversize(el));
-});
-
+    })() ?>,
+    uploadLimitLabel: <?= json_encode((string) ini_get('upload_max_filesize'), JSON_HEX_TAG|JSON_HEX_QUOT) ?>
+};
 </script>
+<script src="<?= h(APP_URL) ?>/assets/js/personal_activities.js?v=<?= @filemtime(__DIR__ . '/../assets/js/personal_activities.js') ?: time() ?>"></script>
 
 <?php require __DIR__ . '/../includes/footer.php'; ?>

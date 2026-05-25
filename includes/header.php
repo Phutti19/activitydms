@@ -51,14 +51,14 @@ $menu = $menus[$role] ?? [];
 
 $initial = mb_substr(trim($display_name), 0, 1, 'UTF-8') ?: '?';
 $header_role_label = ['admin'=>'ผู้ดูแลระบบ', 'director'=>'ผู้อำนวยการ', 'employee'=>'พนักงาน'][$role] ?? '';
-$app_url = htmlspecialchars(APP_URL, ENT_QUOTES, 'UTF-8');
+$app_url = h(APP_URL);
 ?>
 <!DOCTYPE html>
 <html lang="th">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title><?= htmlspecialchars($page_title, ENT_QUOTES, 'UTF-8') ?> — <?= htmlspecialchars(APP_NAME, ENT_QUOTES, 'UTF-8') ?></title>
+    <title><?= h($page_title, ENT_QUOTES, 'UTF-8') ?> — <?= htmlspecialchars(APP_NAME) ?></title>
     <link href="<?= $app_url ?>/assets/vendor/fonts/kanit/kanit.css" rel="stylesheet">
     <link href="<?= $app_url ?>/assets/vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet">
     <link href="<?= $app_url ?>/assets/vendor/bootstrap-icons/font/bootstrap-icons.css" rel="stylesheet">
@@ -73,7 +73,7 @@ $app_url = htmlspecialchars(APP_URL, ENT_QUOTES, 'UTF-8');
             aria-controls="sidebar" aria-label="เปิดเมนู">
         <i class="bi bi-list fs-4"></i>
     </button>
-    <span class="fw-bold ms-2 topbar-brand"><?= htmlspecialchars(APP_NAME, ENT_QUOTES, 'UTF-8') ?></span>
+    <span class="fw-bold ms-2 topbar-brand"><?= h(APP_NAME) ?></span>
     <div class="ms-auto d-flex align-items-center gap-2">
 
         <div class="dropdown" id="notifBellWrap">
@@ -104,9 +104,9 @@ $app_url = htmlspecialchars(APP_URL, ENT_QUOTES, 'UTF-8');
             </div>
         </div>
 
-        <span class="sidebar-user-avatar role-<?= htmlspecialchars($role, ENT_QUOTES, 'UTF-8') ?> topbar-avatar"
+        <span class="sidebar-user-avatar role-<?= h($role) ?> topbar-avatar"
               style="width:32px;height:32px;font-size:13px;">
-            <?= htmlspecialchars($initial, ENT_QUOTES, 'UTF-8') ?>
+            <?= h($initial) ?>
         </span>
     </div>
 </nav>
@@ -137,15 +137,15 @@ window.__CSRF_NAME__  = <?= json_encode(CSRF_TOKEN_NAME, JSON_UNESCAPED_SLASHES)
         </div>
 
         <div class="sidebar-user d-flex align-items-center gap-3">
-            <span class="sidebar-user-avatar role-<?= htmlspecialchars($role, ENT_QUOTES, 'UTF-8') ?>">
-                <?= htmlspecialchars($initial, ENT_QUOTES, 'UTF-8') ?>
+            <span class="sidebar-user-avatar role-<?= h($role) ?>">
+                <?= h($initial) ?>
             </span>
             <div class="overflow-hidden flex-grow-1">
                 <div class="text-truncate fw-semibold" style="font-size:12px;color:#fff;">
-                    <?= htmlspecialchars($display_name, ENT_QUOTES, 'UTF-8') ?>
+                    <?= h($display_name) ?>
                 </div>
-                <span class="badge-pill badge-role-<?= htmlspecialchars($role, ENT_QUOTES, 'UTF-8') ?>">
-                    <?= htmlspecialchars($header_role_label, ENT_QUOTES, 'UTF-8') ?>
+                <span class="badge-pill badge-role-<?= h($role) ?>">
+                    <?= h($header_role_label) ?>
                 </span>
             </div>
         </div>
@@ -154,13 +154,13 @@ window.__CSRF_NAME__  = <?= json_encode(CSRF_TOKEN_NAME, JSON_UNESCAPED_SLASHES)
             <?php foreach ($menu as $item): ?>
                 <?php if ($item['type'] === 'section'): ?>
                     <li class="sidebar-section-label">
-                        — <?= htmlspecialchars($item['label'], ENT_QUOTES, 'UTF-8') ?> —
+                        — <?= h($item['label']) ?> —
                     </li>
                 <?php else: ?>
                     <?php
                         $is_active   = ($page_active === $item['key']);
                         $is_disabled = empty($item['url']);
-                        $href        = $is_disabled ? '#' : ($app_url . htmlspecialchars($item['url'], ENT_QUOTES, 'UTF-8'));
+                        $href        = $is_disabled ? '#' : ($app_url . h($item['url']));
                         $cls         = 'sidebar-nav-link'
                                        . ($is_active ? ' active' : '')
                                        . ($is_disabled ? ' disabled' : '');
@@ -168,8 +168,8 @@ window.__CSRF_NAME__  = <?= json_encode(CSRF_TOKEN_NAME, JSON_UNESCAPED_SLASHES)
                     <li>
                         <a href="<?= $href ?>" class="<?= $cls ?>"
                            <?= $is_disabled ? 'aria-disabled="true" tabindex="-1" title="เร็ว ๆ นี้"' : '' ?>>
-                            <i class="bi <?= htmlspecialchars($item['icon'], ENT_QUOTES, 'UTF-8') ?>"></i>
-                            <span><?= htmlspecialchars($item['label'], ENT_QUOTES, 'UTF-8') ?></span>
+                            <i class="bi <?= h($item['icon']) ?>"></i>
+                            <span><?= h($item['label']) ?></span>
                             <?php if ($is_disabled): ?>
                                 <i class="bi bi-clock ms-auto" style="font-size:11px;opacity:0.6;"
                                    title="เร็ว ๆ นี้"></i>

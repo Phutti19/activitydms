@@ -63,11 +63,6 @@ $activities = $stmt->fetchAll();
 // ---------------------------------------------------------------------------
 // Helper
 // ---------------------------------------------------------------------------
-function dir_act_fmt(string $dt): string {
-    $ts = strtotime($dt);
-    $m  = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
-    return date('j', $ts) . ' ' . $m[(int)date('n', $ts)-1] . ' ' . (date('Y', $ts)+543);
-}
 
 function dir_time_badge(string $start, string $end): string {
     $now = time();
@@ -81,7 +76,7 @@ function dir_time_badge(string $start, string $end): string {
 $page_title  = 'กิจกรรมทั้งหมด';
 $page_active = 'activities';
 require __DIR__ . '/../includes/header.php';
-$app_url_safe = htmlspecialchars(APP_URL, ENT_QUOTES, 'UTF-8');
+$app_url_safe = h(APP_URL);
 ?>
 
 <div class="page-header">
@@ -90,11 +85,11 @@ $app_url_safe = htmlspecialchars(APP_URL, ENT_QUOTES, 'UTF-8');
 </div>
 
 <!-- Filters -->
-<form method="GET" class="card p-3 mb-3">
+<form method="GET" class="card p-3 mb-3" data-autofilter>
     <div class="row g-2 align-items-end">
         <div class="col-12 col-md-3">
             <label class="form-label small mb-1">ค้นหา</label>
-            <input type="text" name="q" class="form-control" value="<?= htmlspecialchars($f_search, ENT_QUOTES, 'UTF-8') ?>"
+            <input type="text" name="q" class="form-control" value="<?= h($f_search) ?>"
                    placeholder="ชื่อกิจกรรม, สถานที่">
         </div>
         <div class="col-6 col-md-2">
@@ -103,7 +98,7 @@ $app_url_safe = htmlspecialchars(APP_URL, ENT_QUOTES, 'UTF-8');
                 <option value="0">ทุกปี</option>
                 <?php foreach ($years as $y): ?>
                 <option value="<?= (int)$y['id'] ?>" <?= $f_fiscal===(int)$y['id']?'selected':'' ?>>
-                    <?= htmlspecialchars($y['name'], ENT_QUOTES, 'UTF-8') ?>
+                    <?= h($y['name']) ?>
                 </option>
                 <?php endforeach; ?>
             </select>
@@ -114,7 +109,7 @@ $app_url_safe = htmlspecialchars(APP_URL, ENT_QUOTES, 'UTF-8');
                 <option value="0">ทุกประเภท</option>
                 <?php foreach ($types as $t): ?>
                 <option value="<?= (int)$t['id'] ?>" <?= $f_type===(int)$t['id']?'selected':'' ?>>
-                    <?= htmlspecialchars($t['name'], ENT_QUOTES, 'UTF-8') ?>
+                    <?= h($t['name']) ?>
                 </option>
                 <?php endforeach; ?>
             </select>
@@ -175,23 +170,23 @@ $app_url_safe = htmlspecialchars(APP_URL, ENT_QUOTES, 'UTF-8');
                     <td data-label="กิจกรรม">
                         <a href="<?= $app_url_safe ?>/director/activity_view.php?id=<?= (int)$a['id'] ?>"
                            class="fw-medium text-decoration-none">
-                            <?= htmlspecialchars($a['title'], ENT_QUOTES, 'UTF-8') ?>
+                            <?= h($a['title']) ?>
                         </a>
                         <div class="small mt-1">
                             <span class="badge"
-                                  style="background:<?= htmlspecialchars($color, ENT_QUOTES, 'UTF-8') ?>;">
-                                <?= htmlspecialchars($a['type_name'] ?? '—', ENT_QUOTES, 'UTF-8') ?>
+                                  style="background:<?= h($color) ?>;">
+                                <?= h($a['type_name'] ?? '—') ?>
                             </span>
                             <?php if (!empty($a['location'])): ?>
                             <span class="text-muted ms-1">
                                 <i class="bi bi-geo-alt"></i>
-                                <?= htmlspecialchars($a['location'], ENT_QUOTES, 'UTF-8') ?>
+                                <?= h($a['location']) ?>
                             </span>
                             <?php endif; ?>
                         </div>
                     </td>
                     <td data-label="วันที่" class="small text-muted text-nowrap">
-                        <?= htmlspecialchars(dir_act_fmt($a['start_datetime']), ENT_QUOTES, 'UTF-8') ?>
+                        <?= h(th_date($a['start_datetime'])) ?>
                     </td>
                     <td data-label="ผู้เข้าร่วม" class="text-center">
                         <?= (int)$a['reg_total'] ?> คน

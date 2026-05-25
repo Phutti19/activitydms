@@ -91,11 +91,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 // Fetch related data
 // ---------------------------------------------------------------------------
 $photos = $pdo->prepare(
-    'SELECT id, filename, original_name FROM activity_photos
+    'SELECT id, source, filename, original_name, drive_url FROM activity_photos
      WHERE activity_id = :id ORDER BY sort_order ASC, id ASC'
 );
 $photos->execute([':id' => $id]);
 $photos = $photos->fetchAll();
+$upload_photos = array_values(array_filter($photos, fn($p) => ($p['source'] ?? 'upload') === 'upload'));
+$drive_photos  = array_values(array_filter($photos, fn($p) => ($p['source'] ?? 'upload') === 'drive_link'));
 
 $attachments = $pdo->prepare(
     'SELECT id, type, label, filename, url FROM activity_attachments
@@ -118,24 +120,18 @@ $e_ts     = strtotime((string)$activity['end_datetime']);
 $ended    = $e_ts < $now;
 $ongoing  = ($s <= $now && $e_ts >= $now);
 
-$months = ['','ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
-$fmt = function(string $dt) use ($months): string {
-    $ts = strtotime($dt);
-    return date('j', $ts) . ' ' . $months[(int)date('n', $ts)] . ' ' . (date('Y', $ts)+543) . ', ' . date('H:i', $ts) . ' น.';
-};
+$fmt = fn(string $dt): string => th_datetime($dt) . ' น.';
 
 $color  = preg_match('/^#[0-9a-fA-F]{6}$/', (string)$activity['type_color']) ? $activity['type_color'] : '#5F5E5A';
 $ts_label = $ended ? 'เสร็จสิ้น' : ($ongoing ? 'กำลังดำเนินอยู่' : 'กำลังจะมาถึง');
 $ts_bg    = $ended ? '#D1FAE5' : ($ongoing ? '#FEF3C7' : '#DBEAFE');
 $ts_fg    = $ended ? '#065F46' : ($ongoing ? '#92400E' : '#1E40AF');
 
-$reg_label = ['registered'=>'ยืนยันเข้าร่วม','attended'=>'เข้าร่วมแล้ว','absent'=>'ไม่เข้าร่วม'];
-$reg_badge = ['registered'=>'secondary','attended'=>'success','absent'=>'danger'];
 
-$page_title  = htmlspecialchars($activity['title'], ENT_QUOTES, 'UTF-8');
+$page_title  = h($activity['title']);
 $page_active = 'my_activities';
 require __DIR__ . '/../includes/header.php';
-$app_url_safe = htmlspecialchars(APP_URL, ENT_QUOTES, 'UTF-8');
+$app_url_safe = h(APP_URL);
 ?>
 
 <div class="page-header flex-wrap gap-2">
@@ -145,17 +141,17 @@ $app_url_safe = htmlspecialchars(APP_URL, ENT_QUOTES, 'UTF-8');
                 <i class="bi bi-arrow-left"></i>
             </a>
             <h1 class="page-title mb-0">
-                <?= htmlspecialchars($activity['title'], ENT_QUOTES, 'UTF-8') ?>
+                <?= h($activity['title']) ?>
             </h1>
         </div>
         <div class="d-flex align-items-center gap-2 ms-1 flex-wrap">
-            <span class="badge" style="background:<?= htmlspecialchars($color, ENT_QUOTES, 'UTF-8') ?>;">
-                <?= htmlspecialchars($activity['type_name'] ?? '—', ENT_QUOTES, 'UTF-8') ?>
+            <span class="badge" style="background:<?= h($color) ?>;">
+                <?= h($activity['type_name'] ?? '—') ?>
             </span>
             <span class="badge" style="background:<?= $ts_bg ?>;color:<?= $ts_fg ?>;"><?= $ts_label ?></span>
             <?php if ($my_reg): ?>
-            <span class="badge bg-<?= $reg_badge[$my_reg['status']] ?? 'secondary' ?>">
-                <?= $reg_label[$my_reg['status']] ?? '' ?>
+            <span class="badge bg-<?= reg_badge($my_reg['status']) ?>">
+                <?= h(reg_label($my_reg['status'])) ?>
             </span>
             <?php endif; ?>
         </div>
@@ -169,35 +165,35 @@ $app_url_safe = htmlspecialchars(APP_URL, ENT_QUOTES, 'UTF-8');
             <div class="row g-3">
                 <div class="col-12 col-sm-6">
                     <div class="small text-muted mb-1"><i class="bi bi-clock me-1"></i>วันเวลาเริ่ม</div>
-                    <div class="fw-medium"><?= htmlspecialchars($fmt($activity['start_datetime']), ENT_QUOTES, 'UTF-8') ?></div>
+                    <div class="fw-medium"><?= h($fmt($activity['start_datetime'])) ?></div>
                 </div>
                 <div class="col-12 col-sm-6">
                     <div class="small text-muted mb-1"><i class="bi bi-clock me-1"></i>วันเวลาสิ้นสุด</div>
-                    <div class="fw-medium"><?= htmlspecialchars($fmt($activity['end_datetime']), ENT_QUOTES, 'UTF-8') ?></div>
+                    <div class="fw-medium"><?= h($fmt($activity['end_datetime'])) ?></div>
                 </div>
                 <?php if (!empty($activity['location'])): ?>
                 <div class="col-12">
                     <div class="small text-muted mb-1"><i class="bi bi-geo-alt me-1"></i>สถานที่</div>
-                    <div><?= htmlspecialchars($activity['location'], ENT_QUOTES, 'UTF-8') ?></div>
+                    <div><?= h($activity['location']) ?></div>
                 </div>
                 <?php endif; ?>
                 <?php if (!empty($activity['fiscal_name'])): ?>
                 <div class="col-12 col-sm-6">
                     <div class="small text-muted mb-1"><i class="bi bi-calendar-range me-1"></i>ปีงบประมาณ</div>
-                    <div><?= htmlspecialchars($activity['fiscal_name'], ENT_QUOTES, 'UTF-8') ?></div>
+                    <div><?= h($activity['fiscal_name']) ?></div>
                 </div>
                 <?php endif; ?>
                 <?php if (!empty($activity['description'])): ?>
                 <div class="col-12">
                     <div class="small text-muted mb-1">รายละเอียด</div>
                     <div class="text-body" style="white-space:pre-wrap;word-break:break-word;">
-                        <?= htmlspecialchars($activity['description'], ENT_QUOTES, 'UTF-8') ?>
+                        <?= h($activity['description']) ?>
                     </div>
                 </div>
                 <?php endif; ?>
                 <?php if (!empty($activity['external_url'])): ?>
                 <div class="col-12">
-                    <a href="<?= htmlspecialchars($activity['external_url'], ENT_QUOTES, 'UTF-8') ?>"
+                    <a href="<?= h($activity['external_url']) ?>"
                        class="btn btn-outline-primary btn-sm" target="_blank" rel="noopener">
                         <i class="bi bi-box-arrow-up-right me-1"></i>ลิงก์ภายนอก
                     </a>
@@ -214,7 +210,7 @@ $app_url_safe = htmlspecialchars(APP_URL, ENT_QUOTES, 'UTF-8');
             <div class="text-center mb-3" style="font-size:40px;">📜</div>
             <h6 class="fw-semibold text-center mb-2">เกียรติบัตรของคุณ</h6>
             <p class="small text-muted text-center mb-3">
-                <?= htmlspecialchars($my_cert['original_name'], ENT_QUOTES, 'UTF-8') ?>
+                <?= h($my_cert['original_name']) ?>
             </p>
             <a href="<?= $app_url_safe ?>/api/download.php?type=cert&id=<?= (int)$my_cert['id'] ?>"
                class="btn btn-warning w-100" target="_blank">
@@ -275,26 +271,48 @@ $app_url_safe = htmlspecialchars(APP_URL, ENT_QUOTES, 'UTF-8');
     </div>
 </div>
 
-<?php if (!empty($photos)): ?>
+<?php if (!empty($upload_photos) || !empty($drive_photos)): ?>
 <div class="card mb-3">
     <div class="card-header fw-semibold">
-        <i class="bi bi-images me-1"></i>ภาพกิจกรรม (<?= count($photos) ?>)
+        <i class="bi bi-images me-1"></i>ภาพกิจกรรม (<?= count($upload_photos) + count($drive_photos) ?>)
     </div>
     <div class="card-body">
+        <?php if (!empty($upload_photos)): ?>
         <div class="row g-2">
-            <?php foreach ($photos as $ph): ?>
+            <?php foreach ($upload_photos as $ph):
+                $orig_safe = h((string)($ph['original_name'] ?? '')); ?>
             <div class="col-6 col-md-4 col-lg-3">
                 <a href="<?= $app_url_safe ?>/api/download.php?type=photo&id=<?= (int)$ph['id'] ?>"
                    target="_blank" class="d-block rounded overflow-hidden"
                    style="aspect-ratio:4/3;background:#f1f5f9;">
                     <img src="<?= $app_url_safe ?>/api/download.php?type=photo&id=<?= (int)$ph['id'] ?>"
-                         alt="<?= htmlspecialchars($ph['original_name'], ENT_QUOTES, 'UTF-8') ?>"
+                         alt="<?= $orig_safe ?>"
                          class="w-100 h-100" style="object-fit:cover;"
                          loading="lazy">
                 </a>
             </div>
             <?php endforeach; ?>
         </div>
+        <?php endif; ?>
+
+        <?php if (!empty($drive_photos)): ?>
+        <div class="<?= !empty($upload_photos) ? 'mt-3' : '' ?>">
+            <h6 class="fw-semibold mb-2 text-muted small">
+                <i class="bi bi-link-45deg me-1"></i> ลิงก์ Drive (<?= count($drive_photos) ?>)
+            </h6>
+            <div class="list-group">
+                <?php foreach ($drive_photos as $dp):
+                    $du_safe = h((string)($dp['drive_url'] ?? '')); ?>
+                <a href="<?= $du_safe ?>" target="_blank" rel="noopener"
+                   class="list-group-item list-group-item-action d-flex align-items-center gap-2">
+                    <i class="bi bi-google text-primary"></i>
+                    <span class="text-truncate flex-grow-1" title="<?= $du_safe ?>"><?= $du_safe ?></span>
+                    <i class="bi bi-box-arrow-up-right text-muted small"></i>
+                </a>
+                <?php endforeach; ?>
+            </div>
+        </div>
+        <?php endif; ?>
     </div>
 </div>
 <?php endif; ?>
@@ -311,10 +329,10 @@ $app_url_safe = htmlspecialchars(APP_URL, ENT_QUOTES, 'UTF-8');
             <i class="bi bi-link-45deg text-primary fs-5"></i>
             <div class="flex-grow-1 overflow-hidden">
                 <div class="fw-medium text-truncate">
-                    <?= htmlspecialchars($att['label'], ENT_QUOTES, 'UTF-8') ?>
+                    <?= h($att['label']) ?>
                 </div>
             </div>
-            <a href="<?= htmlspecialchars($att['url'], ENT_QUOTES, 'UTF-8') ?>"
+            <a href="<?= h($att['url']) ?>"
                class="btn btn-sm btn-outline-primary" target="_blank" rel="noopener">
                 <i class="bi bi-box-arrow-up-right"></i>
             </a>
@@ -322,7 +340,7 @@ $app_url_safe = htmlspecialchars(APP_URL, ENT_QUOTES, 'UTF-8');
             <i class="bi bi-file-earmark-text text-secondary fs-5"></i>
             <div class="flex-grow-1 overflow-hidden">
                 <div class="fw-medium text-truncate">
-                    <?= htmlspecialchars($att['label'], ENT_QUOTES, 'UTF-8') ?>
+                    <?= h($att['label']) ?>
                 </div>
             </div>
             <a href="<?= $app_url_safe ?>/api/download.php?type=attachment&id=<?= (int)$att['id'] ?>"

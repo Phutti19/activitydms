@@ -110,21 +110,6 @@ $years_stmt = db()->prepare('SELECT id, name FROM fiscal_years ORDER BY start_ye
 $years_stmt->execute();
 $years = $years_stmt->fetchAll();
 
-function time_status_of(array $a): array {
-    $now = time();
-    $s = strtotime($a['start_datetime']);
-    $e = strtotime($a['end_datetime']);
-    if ($e < $now)  return ['key'=>'completed', 'label'=>'เสร็จสิ้น',     'bg'=>'#D1FAE5', 'fg'=>'#065F46'];
-    if ($s <= $now) return ['key'=>'ongoing',   'label'=>'กำลังดำเนินอยู่', 'bg'=>'#FEF3C7', 'fg'=>'#92400E'];
-    return                 ['key'=>'upcoming',  'label'=>'กำลังจะมาถึง',   'bg'=>'#DBEAFE', 'fg'=>'#1E40AF'];
-}
-
-function format_date_th(string $datetime): string {
-    $ts = strtotime($datetime);
-    $months = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
-    return date('j', $ts) . ' ' . $months[(int)date('n', $ts) - 1] . ' '
-         . (date('Y', $ts) + 543) . ', ' . date('H:i', $ts);
-}
 
 $page_title  = 'กิจกรรม';
 $page_active = 'activities';
@@ -136,24 +121,24 @@ require __DIR__ . '/../includes/header.php';
         <h1 class="page-title">กิจกรรมขององค์กร</h1>
         <p class="text-muted small mb-0">ทั้งหมด <?= count($activities) ?> รายการ (เฉพาะ scope องค์กร)</p>
     </div>
-    <a href="<?= htmlspecialchars(APP_URL, ENT_QUOTES, 'UTF-8') ?>/admin/activity_form.php?action=create"
+    <a href="<?= h(APP_URL) ?>/admin/activity_form.php?action=create"
        class="btn btn-primary">
         <i class="bi bi-plus-lg me-1"></i> เพิ่มกิจกรรม
     </a>
 </div>
 
-<form method="GET" class="card p-3 mb-3">
+<form method="GET" class="card p-3 mb-3" data-autofilter>
     <div class="row g-2">
         <div class="col-12 col-md-4">
             <input type="text" name="q" class="form-control" placeholder="ค้นหาชื่อ / สถานที่"
-                   value="<?= htmlspecialchars($q, ENT_QUOTES, 'UTF-8') ?>">
+                   value="<?= h($q) ?>">
         </div>
         <div class="col-6 col-md-2">
             <select name="type" class="form-select">
                 <option value="0">ทุกประเภท</option>
                 <?php foreach ($types as $t): ?>
                     <option value="<?= (int)$t['id'] ?>" <?= $f_type===(int)$t['id']?'selected':'' ?>>
-                        <?= htmlspecialchars($t['name'], ENT_QUOTES, 'UTF-8') ?>
+                        <?= h($t['name']) ?>
                     </option>
                 <?php endforeach; ?>
             </select>
@@ -163,7 +148,7 @@ require __DIR__ . '/../includes/header.php';
                 <option value="0">ทุกปี</option>
                 <?php foreach ($years as $y): ?>
                     <option value="<?= (int)$y['id'] ?>" <?= $f_fiscal===(int)$y['id']?'selected':'' ?>>
-                        <?= htmlspecialchars($y['name'], ENT_QUOTES, 'UTF-8') ?>
+                        <?= h($y['name']) ?>
                     </option>
                 <?php endforeach; ?>
             </select>
@@ -198,8 +183,8 @@ require __DIR__ . '/../includes/header.php';
 <div class="row g-3">
     <?php foreach ($activities as $a):
         $color = preg_match('/^#[0-9a-fA-F]{6}$/', (string)$a['type_color']) ? $a['type_color'] : '#5F5E5A';
-        $title_safe = htmlspecialchars($a['title'], ENT_QUOTES, 'UTF-8');
-        $ts = time_status_of($a);
+        $title_safe = h($a['title']);
+        $ts = activity_time_status($a);
         $view_url = APP_URL . '/admin/activity_view.php?id=' . (int)$a['id'];
         $edit_url = APP_URL . '/admin/activity_form.php?action=edit&id=' . (int)$a['id'];
     ?>
@@ -209,7 +194,7 @@ require __DIR__ . '/../includes/header.php';
             <div class="p-3 d-flex flex-column h-100">
                 <div class="d-flex flex-wrap gap-1 mb-2">
                     <span class="badge-pill" style="background:<?= $color ?>1A;color:<?= $color ?>;">
-                        <?= htmlspecialchars($a['type_name'] ?? '—', ENT_QUOTES, 'UTF-8') ?>
+                        <?= h($a['type_name'] ?? '—') ?>
                     </span>
                     <span class="badge-pill" style="background:#DBEAFE;color:#1E40AF;">
                         <i class="bi bi-building"></i> องค์กร
@@ -224,7 +209,7 @@ require __DIR__ . '/../includes/header.php';
                         </span>
                     <?php endif; ?>
                     <span class="badge-pill" style="background:<?= $ts['bg'] ?>;color:<?= $ts['fg'] ?>;">
-                        <?= htmlspecialchars($ts['label'], ENT_QUOTES, 'UTF-8') ?>
+                        <?= h($ts['label']) ?>
                     </span>
                     <?php if ((int)$a['is_open_registration'] === 1 && $ts['key'] === 'upcoming'): ?>
                         <span class="badge-pill bg-success text-white">เปิดเข้าร่วม</span>
@@ -238,19 +223,19 @@ require __DIR__ . '/../includes/header.php';
                 <?php if (!empty($a['description'])): ?>
                     <p class="text-muted small mb-2"
                        style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">
-                        <?= htmlspecialchars($a['description'], ENT_QUOTES, 'UTF-8') ?>
+                        <?= h($a['description']) ?>
                     </p>
                 <?php endif; ?>
 
                 <div class="small text-muted mb-1">
                     <i class="bi bi-calendar3 me-1"></i>
-                    <?= htmlspecialchars(format_date_th($a['start_datetime']), ENT_QUOTES, 'UTF-8') ?>
-                    – <?= htmlspecialchars(date('H:i', strtotime($a['end_datetime'])), ENT_QUOTES, 'UTF-8') ?>
+                    <?= h(th_datetime($a['start_datetime'])) ?>
+                    – <?= h(date('H:i', strtotime($a['end_datetime']))) ?>
                 </div>
                 <?php if (!empty($a['location'])): ?>
                 <div class="small text-muted mb-2 text-truncate">
                     <i class="bi bi-geo-alt me-1"></i>
-                    <?= htmlspecialchars($a['location'], ENT_QUOTES, 'UTF-8') ?>
+                    <?= h($a['location']) ?>
                 </div>
                 <?php endif; ?>
 
@@ -264,11 +249,11 @@ require __DIR__ . '/../includes/header.php';
                         <i class="bi bi-paperclip"></i> <?= (int)$a['attach_count'] ?>
                     </div>
                     <div class="d-flex gap-1">
-                        <a href="<?= htmlspecialchars($view_url, ENT_QUOTES, 'UTF-8') ?>"
+                        <a href="<?= h($view_url) ?>"
                            class="btn btn-sm btn-outline-primary" title="ดูรายละเอียด">
                             <i class="bi bi-eye"></i>
                         </a>
-                        <a href="<?= htmlspecialchars($edit_url, ENT_QUOTES, 'UTF-8') ?>"
+                        <a href="<?= h($edit_url) ?>"
                            class="btn btn-sm btn-outline-secondary" title="แก้ไข">
                             <i class="bi bi-pencil"></i>
                         </a>

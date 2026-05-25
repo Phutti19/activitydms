@@ -55,6 +55,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (mb_strlen($location) > 255) $errors[] = 'สถานที่ยาวเกินกำหนด';
     if (!in_array($format, VALID_FORMATS, true)) $errors[] = 'รูปแบบกิจกรรมไม่ถูกต้อง';
     if ($format === 'onsite' && $location === '') $errors[] = 'รูปแบบออนไซต์ต้องระบุสถานที่';
+    if ($format === 'online' && $external_url === '') $errors[] = 'รูปแบบออนไลน์ต้องระบุลิงก์เข้าร่วม';
 
     $check = db()->prepare('SELECT 1 FROM activity_types WHERE id = :id AND is_active = 1');
     $check->execute([':id' => $type_id]);
@@ -216,7 +217,7 @@ require __DIR__ . '/../includes/header.php';
                 : 'กรอกข้อมูลพื้นฐาน — เพิ่มภาพและไฟล์แนบได้หลังบันทึก' ?>
         </p>
     </div>
-    <a href="<?= htmlspecialchars(APP_URL, ENT_QUOTES, 'UTF-8') ?>/admin/manage_activities.php"
+    <a href="<?= h(APP_URL) ?>/admin/manage_activities.php"
        class="btn btn-outline-secondary">
         <i class="bi bi-arrow-left me-1"></i> กลับ
     </a>
@@ -232,7 +233,7 @@ require __DIR__ . '/../includes/header.php';
                     ชื่อกิจกรรม <span class="text-danger">*</span>
                 </label>
                 <input type="text" id="aTitle" name="title" class="form-control" required maxlength="255"
-                       value="<?= htmlspecialchars($val('title'), ENT_QUOTES, 'UTF-8') ?>">
+                       value="<?= h($val('title')) ?>">
             </div>
 
             <div class="col-12 col-md-6">
@@ -244,7 +245,7 @@ require __DIR__ . '/../includes/header.php';
                     <?php foreach ($types as $t): ?>
                         <option value="<?= (int)$t['id'] ?>"
                                 <?= (int)$val('activity_type_id') === (int)$t['id'] ? 'selected' : '' ?>>
-                            <?= htmlspecialchars($t['name'], ENT_QUOTES, 'UTF-8') ?>
+                            <?= h($t['name']) ?>
                         </option>
                     <?php endforeach; ?>
                 </select>
@@ -255,12 +256,12 @@ require __DIR__ . '/../includes/header.php';
                 </label>
                 <div class="btn-group w-100" role="group" aria-label="รูปแบบกิจกรรม">
                     <input type="radio" class="btn-check" name="format" id="fmtOnsite" value="onsite"
-                           <?= $current_format === 'onsite' ? 'checked' : '' ?> required>
+                           autocomplete="off" <?= $current_format === 'onsite' ? 'checked' : '' ?> required>
                     <label class="btn btn-outline-primary" for="fmtOnsite">
                         <i class="bi bi-geo-alt me-1"></i> ออนไซต์
                     </label>
                     <input type="radio" class="btn-check" name="format" id="fmtOnline" value="online"
-                           <?= $current_format === 'online' ? 'checked' : '' ?>>
+                           autocomplete="off" <?= $current_format === 'online' ? 'checked' : '' ?>>
                     <label class="btn btn-outline-primary" for="fmtOnline">
                         <i class="bi bi-camera-video me-1"></i> ออนไลน์
                     </label>
@@ -276,7 +277,7 @@ require __DIR__ . '/../includes/header.php';
                     <?php foreach ($years as $y): ?>
                         <option value="<?= (int)$y['id'] ?>"
                                 <?= $default_fiscal === (int)$y['id'] ? 'selected' : '' ?>>
-                            <?= htmlspecialchars($y['name'], ENT_QUOTES, 'UTF-8') ?>
+                            <?= h($y['name']) ?>
                             <?= (int)$y['is_active'] === 1 ? ' (ปัจจุบัน)' : '' ?>
                         </option>
                     <?php endforeach; ?>
@@ -290,7 +291,7 @@ require __DIR__ . '/../includes/header.php';
                 <div class="row g-1">
                     <div class="col-12 col-sm-7">
                         <input type="date" id="aStartDate" name="start_date" class="form-control" required
-                               value="<?= htmlspecialchars($start_date_val, ENT_QUOTES, 'UTF-8') ?>">
+                               value="<?= h($start_date_val) ?>">
                     </div>
                     <div class="col-12 col-sm-5">
                         <div class="time-pill">
@@ -319,7 +320,7 @@ require __DIR__ . '/../includes/header.php';
                 <div class="row g-1">
                     <div class="col-12 col-sm-7">
                         <input type="date" id="aEndDate" name="end_date" class="form-control" required
-                               value="<?= htmlspecialchars($end_date_val, ENT_QUOTES, 'UTF-8') ?>">
+                               value="<?= h($end_date_val) ?>">
                     </div>
                     <div class="col-12 col-sm-5">
                         <div class="time-pill">
@@ -342,34 +343,38 @@ require __DIR__ . '/../includes/header.php';
                 </div>
             </div>
 
-            <div class="col-12">
+            <div class="col-12" data-fmt-show="onsite">
                 <label for="aLocation" class="form-label small fw-medium">
-                    <span data-fmt-label data-onsite="สถานที่" data-online="แพลตฟอร์มออนไลน์ / ลิงก์เข้าร่วม">สถานที่</span>
+                    สถานที่
                 </label>
                 <input type="text" id="aLocation" name="location" class="form-control" maxlength="255"
-                       value="<?= htmlspecialchars($val('location'), ENT_QUOTES, 'UTF-8') ?>"
+                       value="<?= h($val('location')) ?>"
                        placeholder="เช่น ห้องประชุมใหญ่ ชั้น 3 อาคาร 50">
-                <div class="form-text small">
-                    <span data-fmt-hint data-onsite="ออนไซต์ — ระบุสถานที่จริง"
-                          data-online="ออนไลน์ — แนะนำใส่ชื่อแพลตฟอร์ม (Zoom, Google Meet) ที่ช่อง 'ลิงก์ภายนอก' ด้านล่าง">
-                        ออนไซต์ — ระบุสถานที่จริง
-                    </span>
-                </div>
+                <div class="form-text small">ออนไซต์ — ระบุสถานที่จริง</div>
             </div>
 
             <div class="col-12">
                 <label for="aDesc" class="form-label small fw-medium">รายละเอียด</label>
                 <textarea id="aDesc" name="description" class="form-control" rows="4"><?=
-                    htmlspecialchars($val('description'), ENT_QUOTES, 'UTF-8')
+                    h($val('description'))
                 ?></textarea>
             </div>
 
             <div class="col-12">
-                <label for="aUrl" class="form-label small fw-medium">ลิงก์ภายนอก</label>
+                <label for="aUrl" class="form-label small fw-medium">
+                    <span data-fmt-label data-onsite="ลิงก์ภายนอก"
+                          data-online="ลิงก์เข้าร่วม">ลิงก์ภายนอก</span>
+                    <span class="text-danger" data-fmt-show="online">*</span>
+                </label>
                 <input type="url" id="aUrl" name="external_url" class="form-control" maxlength="500"
-                       value="<?= htmlspecialchars($val('external_url'), ENT_QUOTES, 'UTF-8') ?>"
+                       value="<?= h($val('external_url')) ?>"
                        placeholder="https://meet.google.com/... หรือ https://...">
-                <div class="form-text">ใช้สำหรับ Google Meet / เว็บไซต์งาน — ไม่จำเป็น</div>
+                <div class="form-text small">
+                    <span data-fmt-hint data-onsite="ใช้สำหรับเว็บไซต์งาน — ไม่จำเป็น"
+                          data-online="ออนไลน์ — วางลิงก์เข้าห้องประชุม (Zoom, Google Meet ฯลฯ)">
+                        ใช้สำหรับเว็บไซต์งาน — ไม่จำเป็น
+                    </span>
+                </div>
             </div>
 
             <div class="col-12">
@@ -393,7 +398,7 @@ require __DIR__ . '/../includes/header.php';
             <i class="bi bi-check-lg me-1"></i>
             <?= $is_edit ? 'บันทึกการแก้ไข' : 'สร้างกิจกรรม' ?>
         </button>
-        <a href="<?= htmlspecialchars(APP_URL, ENT_QUOTES, 'UTF-8') ?>/admin/manage_activities.php"
+        <a href="<?= h(APP_URL) ?>/admin/manage_activities.php"
            class="btn btn-outline-secondary">ยกเลิก</a>
     </div>
 </form>
@@ -406,6 +411,9 @@ require __DIR__ . '/../includes/header.php';
         document.querySelectorAll('[data-fmt-label], [data-fmt-hint]').forEach(el => {
             const v = el.dataset[f];
             if (v) el.textContent = v;
+        });
+        document.querySelectorAll('[data-fmt-show]').forEach(el => {
+            el.classList.toggle('d-none', el.dataset.fmtShow !== f);
         });
     };
     document.querySelectorAll('input[name="format"]').forEach(el =>

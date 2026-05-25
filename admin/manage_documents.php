@@ -116,11 +116,11 @@ require __DIR__ . '/../includes/header.php';
 </div>
 
 <div class="card p-3 mb-3">
-    <form method="GET" class="row g-2 align-items-end">
+    <form method="GET" class="row g-2 align-items-end" data-autofilter>
         <div class="col-12 col-md-8">
             <input type="text" name="q" class="form-control"
                    placeholder="ค้นหาชื่อเอกสาร..."
-                   value="<?= htmlspecialchars($q, ENT_QUOTES, 'UTF-8') ?>">
+                   value="<?= h($q) ?>">
         </div>
         <div class="col-6 col-md-2">
             <button type="submit" class="btn btn-outline-primary w-100">
@@ -129,7 +129,7 @@ require __DIR__ . '/../includes/header.php';
         </div>
         <?php if ($q !== ''): ?>
         <div class="col-6 col-md-2">
-            <a href="<?= htmlspecialchars(APP_URL, ENT_QUOTES, 'UTF-8') ?>/admin/manage_documents.php"
+            <a href="<?= h(APP_URL) ?>/admin/manage_documents.php"
                class="btn btn-outline-secondary w-100">ล้าง</a>
         </div>
         <?php endif; ?>
@@ -158,7 +158,7 @@ require __DIR__ . '/../includes/header.php';
             </thead>
             <tbody>
                 <?php foreach ($documents as $doc):
-                    $title_safe = htmlspecialchars($doc['title'], ENT_QUOTES, 'UTF-8');
+                    $title_safe = h($doc['title']);
                     $ext = strtoupper(pathinfo((string)$doc['original_name'], PATHINFO_EXTENSION));
                     $kb  = number_format((int)$doc['file_size'] / 1024, 0);
                 ?>
@@ -166,13 +166,13 @@ require __DIR__ . '/../includes/header.php';
                     <td data-label="ชื่อเอกสาร">
                         <div class="fw-medium"><?= $title_safe ?></div>
                         <div class="small text-muted text-truncate" style="max-width:280px;">
-                            <?= htmlspecialchars($doc['original_name'], ENT_QUOTES, 'UTF-8') ?>
+                            <?= h($doc['original_name']) ?>
                             <?= $ext !== '' ? "($ext)" : '' ?>
                         </div>
                     </td>
                     <td data-label="ขนาด" class="small"><?= $kb ?> KB</td>
                     <td data-label="อัปโหลดโดย" class="small">
-                        <?= htmlspecialchars($doc['uploader_name'], ENT_QUOTES, 'UTF-8') ?>
+                        <?= h($doc['uploader_name']) ?>
                     </td>
                     <?php $dts = strtotime((string)$doc['created_at']); ?>
                     <td data-label="วันที่" class="small text-muted">
@@ -182,7 +182,7 @@ require __DIR__ . '/../includes/header.php';
                         ) ?>
                     </td>
                     <td data-label="จัดการ" class="text-end text-nowrap">
-                        <a href="<?= htmlspecialchars(APP_URL, ENT_QUOTES, 'UTF-8') ?>/api/download.php?type=document&id=<?= (int)$doc['id'] ?>"
+                        <a href="<?= h(APP_URL) ?>/api/download.php?type=document&id=<?= (int)$doc['id'] ?>"
                            class="btn btn-sm btn-outline-primary" target="_blank" title="ดาวน์โหลด">
                             <i class="bi bi-download"></i>
                         </a>

@@ -81,14 +81,7 @@ $personal_count = count($pers_acts);
 // ---------------------------------------------------------------------------
 // Helper
 // ---------------------------------------------------------------------------
-function emprpt_fmt(string $dt): string {
-    $ts = strtotime($dt);
-    $m  = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
-    return date('j', $ts) . ' ' . $m[(int)date('n', $ts)-1] . ' ' . (date('Y', $ts)+543);
-}
 
-$reg_label = ['registered'=>'ยืนยันเข้าร่วม','attended'=>'เข้าร่วมแล้ว','absent'=>'ไม่เข้าร่วม'];
-$reg_badge = ['registered'=>'secondary','attended'=>'success','absent'=>'danger'];
 
 // Filter summary for PDF header
 $filter_parts = [];
@@ -98,18 +91,18 @@ if ($f_fiscal > 0) {
     }
 }
 if (in_array($f_status, ['registered','attended','absent'], true)) {
-    $filter_parts[] = 'สถานะ: ' . ($reg_label[$f_status] ?? $f_status);
+    $filter_parts[] = 'สถานะ: ' . reg_label($f_status);
 }
 $filter_summary = empty($filter_parts) ? 'ทั้งหมด' : implode(' · ', $filter_parts);
 
-$gen_dt = emprpt_fmt(date('Y-m-d H:i:s')) . ' เวลา ' . date('H:i') . ' น.';
+$gen_dt = report_gen_datetime();
 
 $me_name = $_SESSION['display_name'] ?? '';
 
 $page_title  = 'รายงานของฉัน';
 $page_active = 'my_reports';
 require __DIR__ . '/../includes/header.php';
-$app_url_safe = htmlspecialchars(APP_URL, ENT_QUOTES, 'UTF-8');
+$app_url_safe = h(APP_URL);
 ?>
 
 <div class="page-header d-flex flex-wrap align-items-center justify-content-between gap-2">
@@ -129,17 +122,17 @@ $app_url_safe = htmlspecialchars(APP_URL, ENT_QUOTES, 'UTF-8');
 
 <!-- Print-only header -->
 <div class="print-only print-header">
-    <div class="org-name">สำนักวิทยบริการและเทคโนโลยีสารสนเทศ (ARIT)</div>
-    <div class="report-title">รายงานของฉัน — <?= htmlspecialchars($me_name, ENT_QUOTES, 'UTF-8') ?></div>
+    <div class="org-name"><?= h(ORG_FULL_NAME) ?></div>
+    <div class="report-title">รายงานของฉัน — <?= h($me_name) ?></div>
     <div class="meta">
-        ตัวกรอง: <?= htmlspecialchars($filter_summary, ENT_QUOTES, 'UTF-8') ?>
+        ตัวกรอง: <?= h($filter_summary) ?>
         <br>ชั่วโมงเข้าร่วมรวม: <?= number_format($total_hours, 1) ?> ชม.
-        · วันที่ออกรายงาน: <?= htmlspecialchars($gen_dt, ENT_QUOTES, 'UTF-8') ?>
+        · วันที่ออกรายงาน: <?= h($gen_dt) ?>
     </div>
 </div>
 
 <!-- Filters -->
-<form method="GET" class="card p-3 mb-4">
+<form method="GET" class="card p-3 mb-4" data-autofilter>
     <div class="row g-2 align-items-end">
         <div class="col-6 col-md-4">
             <label class="form-label small mb-1">ปีงบประมาณ</label>
@@ -147,7 +140,7 @@ $app_url_safe = htmlspecialchars(APP_URL, ENT_QUOTES, 'UTF-8');
                 <option value="0">ทุกปี</option>
                 <?php foreach ($years as $y): ?>
                 <option value="<?= (int)$y['id'] ?>" <?= $f_fiscal===(int)$y['id']?'selected':'' ?>>
-                    <?= htmlspecialchars($y['name'], ENT_QUOTES, 'UTF-8') ?>
+                    <?= h($y['name']) ?>
                 </option>
                 <?php endforeach; ?>
             </select>
@@ -276,21 +269,21 @@ $app_url_safe = htmlspecialchars(APP_URL, ENT_QUOTES, 'UTF-8');
                     <td data-label="กิจกรรม">
                         <a href="<?= $app_url_safe ?>/employee/activity_view.php?id=<?= (int)$a['id'] ?>"
                            class="fw-medium text-decoration-none">
-                            <?= htmlspecialchars($a['title'], ENT_QUOTES, 'UTF-8') ?>
+                            <?= h($a['title']) ?>
                         </a>
                         <?php if (!empty($a['type_name'])): ?>
                         <span class="badge ms-1"
-                              style="background:<?= htmlspecialchars($color, ENT_QUOTES, 'UTF-8') ?>;">
-                            <?= htmlspecialchars($a['type_name'], ENT_QUOTES, 'UTF-8') ?>
+                              style="background:<?= h($color) ?>;">
+                            <?= h($a['type_name']) ?>
                         </span>
                         <?php endif; ?>
                     </td>
                     <td data-label="วันที่" class="small text-muted text-nowrap">
-                        <?= htmlspecialchars(emprpt_fmt($a['start_datetime']), ENT_QUOTES, 'UTF-8') ?>
+                        <?= h(th_date($a['start_datetime'])) ?>
                     </td>
                     <td data-label="สถานะ" class="text-center">
-                        <span class="badge bg-<?= $reg_badge[$rs] ?? 'secondary' ?>">
-                            <?= $reg_label[$rs] ?? $rs ?>
+                        <span class="badge bg-<?= reg_badge($rs) ?>">
+                            <?= h(reg_label($rs)) ?>
                         </span>
                     </td>
                 </tr>
@@ -330,16 +323,16 @@ $app_url_safe = htmlspecialchars(APP_URL, ENT_QUOTES, 'UTF-8');
                 ?>
                 <tr>
                     <td data-label="กิจกรรม">
-                        <span class="fw-medium"><?= htmlspecialchars($a['title'], ENT_QUOTES, 'UTF-8') ?></span>
+                        <span class="fw-medium"><?= h($a['title']) ?></span>
                         <?php if (!empty($a['type_name'])): ?>
                         <span class="badge ms-1"
-                              style="background:<?= htmlspecialchars($color, ENT_QUOTES, 'UTF-8') ?>;">
-                            <?= htmlspecialchars($a['type_name'], ENT_QUOTES, 'UTF-8') ?>
+                              style="background:<?= h($color) ?>;">
+                            <?= h($a['type_name']) ?>
                         </span>
                         <?php endif; ?>
                     </td>
                     <td data-label="วันที่" class="small text-muted text-nowrap">
-                        <?= htmlspecialchars(emprpt_fmt($a['start_datetime']), ENT_QUOTES, 'UTF-8') ?>
+                        <?= h(th_date($a['start_datetime'])) ?>
                     </td>
                 </tr>
                 <?php endforeach; ?>
@@ -350,7 +343,7 @@ $app_url_safe = htmlspecialchars(APP_URL, ENT_QUOTES, 'UTF-8');
 </div>
 
 <?php if ($total_reg > 0): ?>
-<script src="<?= htmlspecialchars(APP_URL, ENT_QUOTES, 'UTF-8') ?>/assets/vendor/chartjs/chart.umd.min.js"></script>
+<script src="<?= h(APP_URL) ?>/assets/vendor/chartjs/chart.umd.min.js"></script>
 <script>
 (function () {
     const ctx = document.getElementById('statusChart');

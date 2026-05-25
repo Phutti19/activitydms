@@ -116,17 +116,6 @@ $monthly_rows = $monthly_stmt->fetchAll();
 // ---------------------------------------------------------------------------
 // Helper
 // ---------------------------------------------------------------------------
-function dir_rpt_fmt(string $dt): string {
-    $ts = strtotime($dt);
-    $m  = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
-    return date('j', $ts) . ' ' . $m[(int)date('n', $ts)-1] . ' ' . (date('Y', $ts)+543);
-}
-
-function dir_rpt_ym_th(string $ym): string {
-    [$y, $m] = explode('-', $ym);
-    $months = ['','ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
-    return $months[(int)$m] . ' ' . ((int)$y + 543);
-}
 
 // Filter summary for PDF header
 $filter_parts = [];
@@ -144,12 +133,12 @@ $time_label = ['upcoming'=>'กำลังจะมาถึง','ongoing'=>'�
 if ($time_label !== '') $filter_parts[] = 'สถานะ: ' . $time_label;
 $filter_summary = empty($filter_parts) ? 'ทั้งหมด' : implode(' · ', $filter_parts);
 
-$gen_dt = dir_rpt_fmt(date('Y-m-d H:i:s')) . ' เวลา ' . date('H:i') . ' น.';
+$gen_dt = report_gen_datetime();
 
 $page_title  = 'รายงานสรุป';
 $page_active = 'reports';
 require __DIR__ . '/../includes/header.php';
-$app_url_safe = htmlspecialchars(APP_URL, ENT_QUOTES, 'UTF-8');
+$app_url_safe = h(APP_URL);
 ?>
 
 <div class="page-header d-flex flex-wrap align-items-center justify-content-between gap-2">
@@ -164,16 +153,16 @@ $app_url_safe = htmlspecialchars(APP_URL, ENT_QUOTES, 'UTF-8');
 
 <!-- Print-only header -->
 <div class="print-only print-header">
-    <div class="org-name">สำนักวิทยบริการและเทคโนโลยีสารสนเทศ (ARIT)</div>
+    <div class="org-name"><?= h(ORG_FULL_NAME) ?></div>
     <div class="report-title">รายงานสรุปกิจกรรม</div>
     <div class="meta">
-        ตัวกรอง: <?= htmlspecialchars($filter_summary, ENT_QUOTES, 'UTF-8') ?>
-        <br>วันที่ออกรายงาน: <?= htmlspecialchars($gen_dt, ENT_QUOTES, 'UTF-8') ?>
+        ตัวกรอง: <?= h($filter_summary) ?>
+        <br>วันที่ออกรายงาน: <?= h($gen_dt) ?>
     </div>
 </div>
 
 <!-- Filters -->
-<form method="GET" class="card p-3 mb-4">
+<form method="GET" class="card p-3 mb-4" data-autofilter>
     <div class="row g-2 align-items-end">
         <div class="col-6 col-md-3">
             <label class="form-label small mb-1">ปีงบประมาณ</label>
@@ -181,7 +170,7 @@ $app_url_safe = htmlspecialchars(APP_URL, ENT_QUOTES, 'UTF-8');
                 <option value="0">ทุกปี</option>
                 <?php foreach ($years as $y): ?>
                 <option value="<?= (int)$y['id'] ?>" <?= $f_fiscal===(int)$y['id']?'selected':'' ?>>
-                    <?= htmlspecialchars($y['name'], ENT_QUOTES, 'UTF-8') ?>
+                    <?= h($y['name']) ?>
                 </option>
                 <?php endforeach; ?>
             </select>
@@ -192,7 +181,7 @@ $app_url_safe = htmlspecialchars(APP_URL, ENT_QUOTES, 'UTF-8');
                 <option value="0">ทุกประเภท</option>
                 <?php foreach ($types as $t): ?>
                 <option value="<?= (int)$t['id'] ?>" <?= $f_type===(int)$t['id']?'selected':'' ?>>
-                    <?= htmlspecialchars($t['name'], ENT_QUOTES, 'UTF-8') ?>
+                    <?= h($t['name']) ?>
                 </option>
                 <?php endforeach; ?>
             </select>
@@ -277,7 +266,7 @@ $app_url_safe = htmlspecialchars(APP_URL, ENT_QUOTES, 'UTF-8');
                     $mo_color = $mo_rate >= 80 ? 'success' : ($mo_rate >= 60 ? 'warning' : 'danger');
                 ?>
                 <tr>
-                    <td><?= htmlspecialchars(dir_rpt_ym_th((string)$mo['ym']), ENT_QUOTES, 'UTF-8') ?></td>
+                    <td><?= h(th_month_year((string)$mo['ym'])) ?></td>
                     <td class="text-center"><?= (int)$mo['act_count'] ?></td>
                     <td class="text-center"><?= (int)$mo['reg_count'] ?></td>
                     <td class="text-center"><?= (int)$mo['attended'] ?></td>
@@ -318,7 +307,7 @@ $app_url_safe = htmlspecialchars(APP_URL, ENT_QUOTES, 'UTF-8');
                 ?>
                 <tr>
                     <td class="fw-medium">
-                        <?= htmlspecialchars($dr['dept_name'], ENT_QUOTES, 'UTF-8') ?>
+                        <?= h($dr['dept_name']) ?>
                     </td>
                     <td class="text-center"><?= (int)$dr['member_count'] ?></td>
                     <td class="text-center"><?= (int)$dr['reg_count'] ?></td>
@@ -370,22 +359,22 @@ $app_url_safe = htmlspecialchars(APP_URL, ENT_QUOTES, 'UTF-8');
                     <td data-label="กิจกรรม">
                         <a href="<?= $app_url_safe ?>/director/activity_view.php?id=<?= (int)$a['id'] ?>"
                            class="fw-medium text-decoration-none">
-                            <?= htmlspecialchars($a['title'], ENT_QUOTES, 'UTF-8') ?>
+                            <?= h($a['title']) ?>
                         </a>
                         <div class="small">
                             <span class="badge"
-                                  style="background:<?= htmlspecialchars($color, ENT_QUOTES, 'UTF-8') ?>;">
-                                <?= htmlspecialchars($a['type_name'] ?? '—', ENT_QUOTES, 'UTF-8') ?>
+                                  style="background:<?= h($color) ?>;">
+                                <?= h($a['type_name'] ?? '—') ?>
                             </span>
                             <?php if (!empty($a['location'])): ?>
                             <span class="text-muted">
-                                · <?= htmlspecialchars($a['location'], ENT_QUOTES, 'UTF-8') ?>
+                                · <?= h($a['location']) ?>
                             </span>
                             <?php endif; ?>
                         </div>
                     </td>
                     <td data-label="วันที่" class="small text-muted text-nowrap">
-                        <?= htmlspecialchars(dir_rpt_fmt($a['start_datetime']), ENT_QUOTES, 'UTF-8') ?>
+                        <?= h(th_date($a['start_datetime'])) ?>
                     </td>
                     <td data-label="ผู้เข้าร่วม" class="text-center"><?= (int)$a['reg_total'] ?></td>
                     <td data-label="เข้าร่วมแล้ว" class="text-center text-success fw-medium"><?= (int)$a['attended'] ?></td>
