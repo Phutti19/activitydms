@@ -94,9 +94,12 @@ $is_first_time = !empty($_SESSION['must_change_password']);
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>เปลี่ยนรหัสผ่าน — <?= htmlspecialchars(APP_NAME, ENT_QUOTES, 'UTF-8') ?></title>
-    <link href="<?= htmlspecialchars(APP_URL, ENT_QUOTES, 'UTF-8') ?>/assets/vendor/fonts/kanit/kanit.css" rel="stylesheet">
-    <link href="<?= htmlspecialchars(APP_URL, ENT_QUOTES, 'UTF-8') ?>/assets/vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet">
-    <link href="<?= htmlspecialchars(APP_URL, ENT_QUOTES, 'UTF-8') ?>/assets/vendor/bootstrap-icons/font/bootstrap-icons.css" rel="stylesheet">
+    <!-- Google Fonts: Kanit (Thai) -->
+    <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Bootstrap 5 CDN -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Bootstrap Icons CDN -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
     <style>
         body { font-family: 'Kanit', system-ui, sans-serif; background: #F8FAFC; min-height: 100vh; display: flex; align-items: center; }
         .card { border-radius: 14px; border: 1px solid #E2E8F0; }

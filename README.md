@@ -68,37 +68,51 @@ activitydms/
 - Composer 2.x
 - (Optional แต่แนะนำ) XAMPP / Laragon บน Windows
 
-### 4.2 ขั้นตอน
+### 4.2 ขั้นตอน (Windows)
 
 ```powershell
-# 1) clone & เข้าโฟลเดอร์
+# 1) Clone & เข้าโฟลเดอร์
 git clone <repo-url> activitydms
 cd activitydms
 
-# 2) ติดตั้ง dependencies
+# 2) เปิด OpenSSL extension ใน PHP
+#    หาตำแหน่ง php.ini:
+php -r "echo php_ini_loaded_file();"
+
+#    เปิดไฟล์ php.ini แล้วหา `;extension=openssl` 
+#    เปลี่ยนเป็น `extension=openssl` (เอา ; ออก)
+#    Save แล้ว restart terminal
+
+# 3) ติดตั้ง dependencies via Composer
 composer install
 
-# 3) สร้าง database + import schema + seed
+# 4) สร้าง .env ไฟล์ (copy จาก template)
+copy .env.example .env
+# แก้ค่า:
+#   DB_HOST=127.0.0.1
+#   DB_PASSWORD=<รหัส MySQL ของคุณ>
+#   UPLOAD_PATH=D:/activitydms-uploads  (หรือ absolute path ที่คุณต้องการ)
+
+# 5) สร้าง database + import schema
 mysql -u root -p -e "CREATE DATABASE activitydms CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
 mysql -u root -p activitydms < database/schema.sql
-# (optional) ข้อมูลทดสอบ
+# (optional) เพิ่มข้อมูลทดสอบ:
 mysql -u root -p activitydms < seed_mock_data.sql
 
-# 4) ตั้งค่า .env
-copy .env.example .env
-# แก้ DB_*, MAIL_*, UPLOAD_PATH ให้ตรงเครื่อง
-
-# 5) สร้างโฟลเดอร์ uploads (ตาม UPLOAD_PATH ใน .env — ควรอยู่นอก document root)
+# 6) สร้างโฟลเดอร์ uploads (นอก document root)
 mkdir D:\activitydms-uploads
-mkdir D:\activitydms-uploads\meetings, D:\activitydms-uploads\documents, D:\activitydms-uploads\activities, D:\activitydms-uploads\certificates
+mkdir D:\activitydms-uploads\meetings
+mkdir D:\activitydms-uploads\documents
+mkdir D:\activitydms-uploads\activities
+mkdir D:\activitydms-uploads\certificates
 
-# 6) รัน dev server
+# 7) รัน dev server
 php -S localhost:8000
 ```
 
-เปิด `http://localhost:8000`
+เปิด **`http://localhost:8000`** ในเบราว์เซอร์
 
-### 4.3 Test accounts (dev เท่านั้น)
+### 4.3 Test Accounts (dev เท่านั้น)
 
 | Role | Username | Password |
 |---|---|---|
@@ -108,7 +122,7 @@ php -S localhost:8000
 
 > ทุกบัญชี seed มี `must_change_password = 1` → ครั้งแรก login จะถูกบังคับเปลี่ยนรหัส
 
-### 4.4 Cron (production)
+### 4.4 Cron (Production)
 
 ```cron
 */5 * * * * /usr/bin/php /path/to/activitydms/cron/send_emails.php >> /var/log/activitydms-mail.log 2>&1
@@ -127,6 +141,48 @@ php -S localhost:8000
    - Apache → `logs/error.log` ของ XAMPP/Laragon
    - แอป → [`errors/`](errors/) (ถ้ามี custom error handler)
 3. ถ้า error ชี้ที่ `vendor/autoload.php` → ลืมรัน `composer install`
+
+### 🔴 5.1a OpenSSL ไม่เปิด / "composer install" ล้มเหลว
+**Error:** `The openssl extension is required for SSL/TLS protection but is not available`
+
+**วิธีแก้:**
+1. หาตำแหน่ง `php.ini`:
+   ```powershell
+   php -r "echo php_ini_loaded_file();"
+   ```
+2. เปิดไฟล์ `php.ini` แล้วหา `;extension=openssl` (มีเซมิโคลอน)
+3. เปลี่ยนเป็น `extension=openssl` (เอา `;` ออก)
+4. Save และ restart terminal
+5. เช็ค:
+   ```powershell
+   php -r "echo extension_loaded('openssl') ? 'ENABLED' : 'DISABLED';"
+   ```
+6. รัน `composer install` อีกครั้ง
+
+### 🔴 5.1b ไม่มี `.env` ไฟล์ / "Unable to read any of the environment file(s)"
+**Error:** `Dotenv\Exception\InvalidPathException: Unable to read any of the environment file(s) at [D:\activitydms\config/..\.env]`
+
+**วิธีแก้:**
+1. ตรวจว่าไฟล์ `.env.example` มี ✓
+2. Copy ไฟล์:
+   ```powershell
+   copy .env.example .env
+   ```
+3. เปิด `.env` แล้วแก้:
+   ```ini
+   DB_HOST=127.0.0.1
+   DB_PASSWORD=<รหัส MySQL ของคุณ>
+   UPLOAD_PATH=D:/activitydms-uploads
+   ```
+4. Save
+
+### 🔴 5.1c CSS/JS/Font ไม่โหลด (404 error) / หน้าขาวหรือ unstyled
+**Error:** `[404]: GET /assets/vendor/bootstrap/css/bootstrap.min.css - No such file or directory`
+
+**วิธีแก้:** ระบบใช้ **CDN** ทั้งหมดสำหรับ Bootstrap, Icons, Kanit font, Chart.js, FullCalendar
+- ไม่ต้องดาวน์โหลด vendor libraries ด้วยตัวเอง
+- ไฟล์ CSS/JS โหลดจากที่นี่: [`includes/header.php`](includes/header.php) + [`includes/footer.php`](includes/footer.php)
+- ถ้าโหลดไม่ได้ → เช็คการเชื่อมต่ออินเทอร์เน็ต (CDN ต้องเข้าถึงได้)
 
 ### 🔴 5.2 Login ไม่ได้ / "Invalid credentials"
 - ตรวจว่า import `database/schema.sql` แล้ว (ตาราง `users` ควรมี 31 แถว)

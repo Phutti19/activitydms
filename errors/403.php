@@ -20,9 +20,12 @@ http_response_code(403);
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>403 ไม่มีสิทธิ์เข้าถึง — <?= htmlspecialchars($_app_name, ENT_QUOTES, 'UTF-8') ?></title>
-    <link href="<?= htmlspecialchars($_app_url, ENT_QUOTES, 'UTF-8') ?>/assets/vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet">
-    <link href="<?= htmlspecialchars($_app_url, ENT_QUOTES, 'UTF-8') ?>/assets/vendor/bootstrap-icons/font/bootstrap-icons.css" rel="stylesheet">
-    <link href="<?= htmlspecialchars($_app_url, ENT_QUOTES, 'UTF-8') ?>/assets/vendor/fonts/kanit/kanit.css" rel="stylesheet">
+    <!-- Bootstrap 5 CDN -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Bootstrap Icons CDN -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+    <!-- Google Fonts: Kanit (Thai) -->
+    <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
         body { font-family: 'Kanit', system-ui, sans-serif; background: #F8FAFC; }
         .error-code { font-size: 80px; font-weight: 700; color: #E2E8F0; line-height: 1; }

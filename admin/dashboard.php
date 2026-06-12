@@ -445,7 +445,8 @@ $today_label = $thai_days[(int)date('w')] . ' ' . date('j') . ' ' . $thai_months
 </div>
 
 <?php if ($total_reg > 0): ?>
-<script src="<?= htmlspecialchars(APP_URL, ENT_QUOTES, 'UTF-8') ?>/assets/vendor/chartjs/chart.umd.min.js"></script>
+<!-- Chart.js CDN -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script>
 (function () {
     const ctx = document.getElementById('statusChart');
